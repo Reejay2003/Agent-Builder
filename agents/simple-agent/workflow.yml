@@ -1,0 +1,22 @@
+# Simple NAT agent: ReAct loop, free OpenRouter model, two built-in tools.
+functions:
+  current_datetime:
+    _type: current_datetime
+  wiki_search:
+    _type: wiki_search
+    max_results: 2
+
+llms:
+  main_llm:
+    _type: openai
+    model_name: nvidia/nemotron-3-super-120b-a12b:free
+    base_url: ${LLM_BASE_URL}
+    api_key: ${OPENROUTER_API_KEY}
+    temperature: 0.0
+
+workflow:
+  _type: react_agent
+  tool_names: [current_datetime, wiki_search]
+  llm_name: main_llm
+  verbose: true
+  parse_agent_response_max_retries: 3

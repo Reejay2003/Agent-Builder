@@ -9,3 +9,5 @@ node_modules/
 *.log
 .DS_Store
 data/
+
+third_party/
