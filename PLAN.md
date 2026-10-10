@@ -1,4 +1,4 @@
-# Agent Builder Platform: Master Plan (v6)
+# Agent Builder Platform: Master Plan (v7)
 
 Last updated: 2026-10-08. Personal open-source project on GitHub. No revenue, no funding, so **everything must be free or open source** (section 3).
 
@@ -8,6 +8,10 @@ Tags used for facts:
 - **[memory]**: from my background knowledge, not checked this session; confirm before adopting
 
 ## 0. Changes
+
+### v7
+1. **`pgvector_lite` is now the default retrieval engine; NeMo Retriever is optional.** The dev machine is a Mac with no NVIDIA GPU, and NeMo Retriever's local inference needs one (hosted endpoints are dev/test only, section 3.4). The zero-spend path must work out of the box. NeMo Retriever stays a selectable engine (`--profile gpu`, or hosted endpoint for prototyping). Wherever v6 text below says NeMo Retriever is the default, read it as optional.
+2. **Docker is the packaging model** (section 3.5): one image per service, pinned versions, Compose profiles. Starter stack (Postgres+pgvector, Valkey) is in `deploy/compose/` and verified running.
 
 ### v6
 1. **NeMo Retriever library replaces our hand-built ingestion, embedding and retrieval pipeline** as the default engine of the Knowledge layer (section 8.12). It is Apache-2.0 and open source, does extraction (text, tables, charts, OCR), embedding and retrieval, and has a RAG example plus LangChain and LlamaIndex integrations **[verified: GitHub README, 26.08 release]**.
@@ -130,6 +134,14 @@ The "Systems of record" column is what the Integration layer connects; the "Chan
 2. **LLM:** your own key, or Ollama locally, or NVIDIA's free hosted endpoints for prototyping.
 3. **GPU work (self-hosted speech, big local models):** only if you own an NVIDIA GPU. NVIDIA's free Developer Program allows self-hosting NIMs for research, development and testing on up to 16 GPUs **[verified]**, but that licence is not for production use. Free notebook GPUs (Colab, Kaggle) are fine for experiments only; quotas change **[memory]**.
 4. **Anything beyond that costs money.** Mark it out of scope.
+
+### 3.5 Docker and versioning
+- One `Dockerfile` per service (control, runner, mcp-gateway, knowledge, connectors, channels, web), so services can use different Python or library versions without conflict.
+- Pin exact base images (never `latest`) and lock dependencies (`uv.lock` or hashed requirements). Keep NVIDIA component versions (NAT, Fabric, Relay, Retriever) in one place.
+- Compose lives in `deploy/compose/`. Core stack: Postgres+pgvector, Valkey, services. Profiles: `gpu` (NeMo Retriever), `demo-apps`, `voice`. Config in `.env` (git-ignored), template in `.env.example`.
+- Healthchecks on every container (feeds `doctor`), named volumes for data, non-root users, ports bound to 127.0.0.1.
+- Run: `docker compose -f deploy/compose/docker-compose.yml --env-file .env up -d`.
+- Later: GitHub Actions to build and test images, publish to ghcr.io (free).
 
 ### 3.4 Licence trap to avoid
 NVIDIA's free tiers are **research, development and test** licences; production serving needs NVIDIA AI Enterprise **[verified]**. Because this is an open-source repo others will clone, keep NVIDIA-gated services (NIMs, Riva) as optional providers and document that whoever deploys them for real use owns the licence question.
@@ -412,7 +424,7 @@ Defaults per template live in the AgentSpec `knowledge.retrieval` block. Voice a
 - Fabric needs nothing special: its MCP config points the agent at the gateway.
 
 ### 8.10 Free-stack choices
-NeMo Retriever with LanceDB (in-process, no extra service) as the default; Milvus only if scale demands it. **No-GPU users** run the lite backend (Postgres with pgvector and full-text, CPU embedders), so the zero-spend path still works. Uploaded files on a local volume. NVIDIA's hosted endpoints are prototyping only (section 3.4).
+**Default (v7): the lite backend** (Postgres with pgvector and full-text, CPU embedders, Docling for parsing), so the zero-spend path works on a GPU-less Mac. **Optional:** NeMo Retriever with LanceDB (in-process) for GPU owners or hosted-endpoint prototyping; Milvus only if scale demands it. Uploaded files on a local volume. NVIDIA's hosted endpoints are prototyping only (section 3.4).
 
 ### 8.12 NeMo Retriever integration (v6)
 **What we take from it:** extraction, embedding, vector storage and the `Retriever` query API. **What we keep:** everything that makes retrieval safe and exact.
@@ -426,7 +438,7 @@ NeMo Retriever with LanceDB (in-process, no extra service) as the default; Milvu
 | MCP tools (`knowledge.search` etc.), OPA, Relay traces | Ours |
 | Erasure of a deleted document's chunks and embeddings | Ours, calling the engine's delete; S13 verifies it really removes vectors |
 
-**Interface:** `RetrievalEngine { ingest(doc, meta), search(query, filters, k), delete(doc_id), reindex(embedding_model) }`. Backends: `nemo_retriever` and `pgvector_lite`. The AgentSpec picks nothing here; the deployment config does (`retrieval_engine: nemo_retriever | pgvector_lite`), so agents do not change when the engine does.
+**Interface:** `RetrievalEngine { ingest(doc, meta), search(query, filters, k), delete(doc_id), reindex(embedding_model) }`. Backends: `pgvector_lite` (default) and `nemo_retriever` (optional). The AgentSpec picks nothing here; the deployment config does (`retrieval_engine: nemo_retriever | pgvector_lite`), so agents do not change when the engine does.
 
 **Is "RAG" included?** Its README shows a RAG example that sends retrieved text to an LLM, plus LangChain and LlamaIndex integrations **[verified]**. We still do generation through NAT with our grounding rules (section 8.7), not through its example, so the model stays BYOK.
 
