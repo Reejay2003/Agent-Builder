@@ -10,8 +10,8 @@ landlock:
   compatibility: best_effort
 
 process:
-  run_as_user: sandbox
-  run_as_group: sandbox
+  run_as_user: "1000"
+  run_as_group: "1000"
 
 network_policies:
   llm_openrouter:

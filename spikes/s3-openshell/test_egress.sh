@@ -6,7 +6,7 @@ export PATH="/Applications/Docker.app/Contents/Resources/bin:/opt/homebrew/bin:$
 cd "$(dirname "$0")"
 NAME=s3-demo
 openshell status || exit 1
-time openshell sandbox create --name "$NAME" --policy policy.yaml --no-auto-providers -- \
+time openshell sandbox create --name "$NAME" --policy policy.yaml --no-keep -- \
   sh -c 'echo "allowed:"; curl -s -o /dev/null -w "%{http_code}\n" https://openrouter.ai/api/v1/models;
          echo "denied:";  curl -s -m 8 -o /dev/null -w "%{http_code}\n" https://example.com || echo "blocked"'
 openshell logs "$NAME" --since 5m --source sandbox | tail -20
