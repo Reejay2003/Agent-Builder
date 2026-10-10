@@ -1,0 +1,11 @@
+# Core runtime for the spikes and agents. Python 3.11-3.13 (we use 3.12).
+# Install: make setup   (or: pip install -r requirements.lock)
+# Versions are pinned on purpose: NVIDIA NeMo pieces are 0.x and change between releases.
+packaging
+nvidia-nat-core==1.9.0
+nvidia-nat-langchain[all]==1.9.0
+nvidia-nat-mcp==1.9.0
+# Fabric 0.4.0 is the version verified inside the OpenShell sandbox. Do NOT use --prerelease: it pulls 0.5.0b3.
+nemo-fabric==0.4.0
+nemo-fabric-adapter-contract==0.4.0
+nemo-fabric-adapters-common==0.4.0

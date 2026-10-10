@@ -1,0 +1,11 @@
+# Dev container: Python 3.12 with all pinned dependencies, no local Python needed.
+# Usage: make dev-shell   (repo is mounted at /workspace)
+# Not usable for OpenShell sandbox spikes (those need the host's OpenShell gateway).
+FROM python:3.12-slim
+RUN apt-get update && apt-get install -y --no-install-recommends git curl ca-certificates make \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /workspace
+COPY requirements.lock /tmp/requirements.lock
+RUN pip install --no-cache-dir -r /tmp/requirements.lock
+ENV PYTHONPATH=/workspace/spikes/s2-fabric-nat/src
+CMD ["bash"]

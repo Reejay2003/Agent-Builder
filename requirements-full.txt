@@ -1,0 +1,4 @@
+# Everything NAT ships (eval, profiler, guardrails, other frameworks, ...). Large (about 2 GB).
+# Needs: pip install --pre -r requirements-full.txt   (one dependency is only available as a pre-release)
+-r requirements.txt
+nvidia-nat[most]==1.9.0

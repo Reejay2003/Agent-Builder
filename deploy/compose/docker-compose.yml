@@ -31,6 +31,20 @@ services:
       timeout: 3s
       retries: 10
 
+  # Optional dev container with all Python deps: make dev-shell   (profile `dev`, not started by `up`)
+  dev:
+    profiles: ["dev"]
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.dev
+    env_file: ../../.env
+    volumes:
+      - ../..:/workspace
+    working_dir: /workspace
+    depends_on:
+      postgres:
+        condition: service_healthy
+
 volumes:
   pgdata:
   valkeydata:

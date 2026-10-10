@@ -9,7 +9,7 @@ functions:
 llms:
   main_llm:
     _type: openai
-    model_name: nvidia/nemotron-3-super-120b-a12b:free
+    model_name: ${LLM_MODEL}
     base_url: ${LLM_BASE_URL}
     api_key: ${OPENROUTER_API_KEY}
     temperature: 0.0
