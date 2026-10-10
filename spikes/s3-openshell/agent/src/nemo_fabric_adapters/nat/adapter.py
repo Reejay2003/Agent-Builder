@@ -1,0 +1,972 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+"""NeMo Agent Toolkit adapter for NeMo Fabric.
+
+The adapter builds one in-memory NeMo Agent Toolkit configuration from Fabric's
+normalized configuration and adapter-owned NeMo Agent Toolkit component settings. One persistent adapter
+host owns the resulting workflow for the complete Fabric runtime lifecycle.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import copy
+import logging
+import os
+from contextlib import AsyncExitStack
+from typing import Any
+
+from nemo_fabric_adapters.common import instructions as common_instructions
+from nemo_fabric_adapters.common import lifecycle
+import nemo_fabric_adapters.common.utils as common_utils
+from nemo_fabric_adapter_contract.models import AgentConfig
+from nemo_fabric_adapter_contract.models import AgentMcpServerConfig
+from nemo_fabric_adapter_contract.models import AgentRunError
+from nemo_fabric_adapter_contract.models import AgentRunRequest
+from nemo_fabric_adapter_contract.models import AgentRunResult
+from nemo_fabric_adapter_contract.models import AgentRunStatus
+from nemo_fabric_adapter_contract.models import AgentToolDefinition
+from nemo_fabric_adapter_contract.models import RuntimeContext
+
+HARNESS = "nat"
+MODE = "agent_config"
+WORKFLOW_FACTORY_KIND = "factory"
+FABRIC_REACT_AGENT = "fabric.agent.react"
+FUNCTION_GROUP_SEPARATOR = "__"
+REACT_AGENT_REFS = frozenset(
+    {
+        "react_agent",
+        "nat.plugins.langchain.agent.react_agent/react_agent",
+    }
+)
+RESERVED_MODEL_SETTINGS = frozenset(
+    {
+        "_type",
+        "type",
+        "provider",
+        "model",
+        "model_name",
+        "api_key",
+        "api_key_env",
+        "base_url",
+        "temperature",
+    }
+)
+
+LOGGER = logging.getLogger(__name__)
+
+
+class _NatStreamSerializationError(Exception):
+    """Internal marker for a NeMo Agent Toolkit chunk that cannot cross the JSON boundary."""
+
+
+def main() -> None:
+    """Serve the persistent local-host lifecycle protocol."""
+
+    lifecycle.serve(NatRuntime, config_loader=AgentConfig.from_mapping)
+
+
+def _config_error(code: str, message: str, **metadata: Any) -> lifecycle.LifecycleError:
+    return lifecycle.LifecycleError(code, message, metadata=metadata or None)
+
+
+def _runtime_id(payload: dict[str, Any]) -> str:
+    try:
+        return common_utils.runtime_id(payload)
+    except ValueError as error:
+        raise _config_error(
+            "nat_invalid_runtime_context",
+            "NeMo Agent Toolkit lifecycle payload is missing a runtime ID",
+        ) from error
+
+
+def _agent_config(payload: dict[str, Any]) -> AgentConfig:
+    config = payload.get("config")
+    if not isinstance(config, AgentConfig):
+        raise _config_error(
+            "nat_invalid_agent_config",
+            "NeMo Agent Toolkit requires a validated AgentConfig start payload",
+        )
+    return config
+
+
+def _nat_workflow(agent_config: AgentConfig) -> dict[str, Any]:
+    workflow_config = agent_config.workflow
+    if workflow_config is None:
+        raise _config_error(
+            "nat_invalid_workflow",
+            "AgentConfig.workflow is required",
+            field="workflow",
+        )
+
+    entrypoint = workflow_config.entrypoint
+    if entrypoint.kind != WORKFLOW_FACTORY_KIND:
+        raise _config_error(
+            "nat_invalid_workflow",
+            f"workflow.entrypoint.kind must equal {WORKFLOW_FACTORY_KIND!r}",
+            field="workflow.entrypoint.kind",
+        )
+    if entrypoint.ref != FABRIC_REACT_AGENT:
+        raise _config_error(
+            "nat_invalid_workflow",
+            f"NeMo Agent Toolkit does not support workflow factory {entrypoint.ref!r}",
+            field="workflow.entrypoint.ref",
+        )
+
+    settings = workflow_config.settings
+    if "_type" in settings:
+        raise _config_error(
+            "nat_invalid_workflow",
+            "workflow.settings._type is reserved; use workflow.entrypoint.ref",
+            field="workflow.settings._type",
+        )
+
+    workflow = copy.deepcopy(settings)
+    workflow["_type"] = "react_agent"
+    if _is_react_agent(workflow):
+        workflow.setdefault("tool_names", [])
+    return workflow
+
+
+def _nat_tool_component(
+    name: str,
+    definition: AgentToolDefinition,
+) -> tuple[str, dict[str, Any]]:
+    if definition.kind not in {"function", "function_group"}:
+        raise _config_error(
+            "nat_unsupported_tool_definition",
+            f"NeMo Agent Toolkit does not support tool definition kind {definition.kind!r}",
+            definition=name,
+            kind=definition.kind,
+        )
+    if "_type" in definition.settings:
+        raise _config_error(
+            "nat_tool_definition_reserved",
+            "Tool definition settings cannot replace the normalized ref",
+            definition=name,
+            field=f"tools.definitions.{name}.settings._type",
+        )
+    component = copy.deepcopy(definition.settings)
+    component["_type"] = definition.ref
+    return definition.kind, component
+
+
+def _nat_component_settings(agent_config: AgentConfig) -> dict[str, Any]:
+    if agent_config.harness is not None and agent_config.harness.settings:
+        raise _config_error(
+            "nat_invalid_harness_settings",
+            "The shared NeMo Agent Toolkit adapter does not accept harness settings",
+            fields=sorted(agent_config.harness.settings),
+        )
+
+    functions: dict[str, Any] = {}
+    function_groups: dict[str, Any] = {}
+    definitions = agent_config.tools.definitions if agent_config.tools else {}
+    for name, definition in definitions.items():
+        kind, component = _nat_tool_component(name, definition)
+        target = functions if kind == "function" else function_groups
+        target[name] = component
+
+    return {
+        "workflow": _nat_workflow(agent_config),
+        "functions": functions,
+        "function_groups": function_groups,
+    }
+
+
+def _nat_llm_type(provider: str) -> str:
+    # NeMo Agent Toolkit calls NVIDIA's OpenAI-compatible provider ``nim``. Other
+    # provider identifiers are already NeMo Agent Toolkit component type names
+    # and are validated after installed NeMo Agent Toolkit plugins register their
+    # config objects.
+    return "nim" if provider == "nvidia" else provider
+
+
+def _nat_llms(agent_config: AgentConfig) -> dict[str, dict[str, Any]]:
+    llms: dict[str, dict[str, Any]] = {}
+    for role, model in agent_config.models.items():
+        settings = model.settings
+        reserved = sorted(RESERVED_MODEL_SETTINGS.intersection(settings))
+        if reserved:
+            raise _config_error(
+                "nat_model_settings_reserved",
+                f"Fabric model {role!r} settings cannot replace normalized model fields",
+                role=role,
+                fields=reserved,
+            )
+
+        llm = copy.deepcopy(settings)
+        llm.update(
+            {
+                "_type": _nat_llm_type(model.provider),
+                "model_name": model.model,
+            }
+        )
+        if model.base_url is not None:
+            llm["base_url"] = model.base_url
+        if model.temperature is not None:
+            llm["temperature"] = model.temperature
+
+        api_key_env = model.api_key_env
+        if api_key_env is not None:
+            api_key = os.environ.get(api_key_env)
+            if not api_key:
+                raise _config_error(
+                    "nat_model_api_key_missing",
+                    f"Fabric model {role!r} requires environment variable {api_key_env!r}",
+                    role=role,
+                    api_key_env=api_key_env,
+                )
+            llm["api_key"] = api_key
+
+        llms[role] = llm
+    return llms
+
+
+def _is_react_agent(workflow: dict[str, Any]) -> bool:
+    return workflow.get("_type") in REACT_AGENT_REFS
+
+
+def _apply_system_instruction(
+    config: dict[str, Any], agent_config: AgentConfig
+) -> None:
+    instruction = common_instructions.system_instruction(
+        agent_config,
+        adapter="NeMo Agent Toolkit",
+        supported_modes={"append"},
+    )
+    if instruction is None:
+        return
+
+    workflow = config["workflow"]
+    if not _is_react_agent(workflow):
+        raise _config_error(
+            "nat_system_instruction_unsupported",
+            "instructions.system is supported only for a NeMo Agent Toolkit react_agent workflow",
+            workflow_type=workflow.get("_type"),
+        )
+    if "additional_instructions" in workflow:
+        raise _config_error(
+            "nat_system_instruction_conflict",
+            "instructions.system conflicts with workflow.settings.additional_instructions",
+            fields=[
+                "instructions.system",
+                "workflow.settings.additional_instructions",
+            ],
+        )
+    workflow["additional_instructions"] = instruction.content
+
+
+def _string_list(value: Any, field: str, *, optional: bool = False) -> list[str] | None:
+    if value is None and optional:
+        return None
+    if value is None:
+        return []
+    if not isinstance(value, list) or any(
+        not isinstance(item, str) or not item.strip() or item != item.strip()
+        for item in value
+    ):
+        raise _config_error(
+            "nat_invalid_tool_policy",
+            f"{field} must be a list of non-empty strings",
+            field=field,
+        )
+    return list(dict.fromkeys(value))
+
+
+def nat_mcp_server_config(name: str, server: AgentMcpServerConfig) -> dict[str, Any]:
+    """Translate one normalized MCP server into a NeMo Agent Toolkit server mapping."""
+
+    transport = server.transport.strip().lower().replace("_", "-")
+    target = os.path.expandvars(server.url).strip()
+    if not target:
+        raise _config_error(
+            "nat_invalid_mcp_server",
+            f"NeMo Agent Toolkit MCP server {name!r} requires a non-empty url",
+            server=name,
+        )
+
+    if transport == "stdio":
+        result: dict[str, Any] = {
+            "transport": "stdio",
+            "command": target,
+        }
+
+        if server.args:
+            result["args"] = server.args
+        if server.env:
+            result["env"] = dict(server.env)
+        return result
+
+    if transport in {"http", "streamablehttp"}:
+        transport = "streamable-http"
+    if transport not in {"sse", "streamable-http"}:
+        raise _config_error(
+            "nat_unsupported_mcp_transport",
+            f"NeMo Agent Toolkit MCP server {name!r} has unsupported transport {transport!r}",
+            server=name,
+            transport=transport,
+        )
+    return {"transport": transport, "url": target}
+
+
+def _workflow_tool_names(config: dict[str, Any], reason: str) -> list[str]:
+    tool_names = config["workflow"].get("tool_names")
+    if not isinstance(tool_names, list) or any(
+        not isinstance(name, str) or not name.strip() or name != name.strip()
+        for name in tool_names
+    ):
+        raise _config_error(
+            "nat_workflow_tools_unsupported",
+            f"{reason} requires a NeMo Agent Toolkit workflow with a string-list tool_names field",
+            field="workflow.settings.tool_names",
+        )
+    return tool_names
+
+
+def _mcp_group(name: str, server: AgentMcpServerConfig) -> dict[str, Any] | None:
+    allowed = _string_list(
+        server.allowed_tools,
+        f"mcp.servers.{name}.allowed_tools",
+        optional=True,
+    )
+    blocked = _string_list(
+        server.blocked_tools,
+        f"mcp.servers.{name}.blocked_tools",
+    )
+    assert blocked is not None
+
+    if allowed is not None:
+        overlap = sorted(set(allowed).intersection(blocked))
+        if overlap:
+            raise _config_error(
+                "nat_invalid_mcp_tool_policy",
+                f"NeMo Agent Toolkit MCP server {name!r} cannot both allow and block a tool",
+                server=name,
+                tool=overlap[0],
+            )
+        if not allowed:
+            return None
+
+    group: dict[str, Any] = {
+        "_type": "mcp_client",
+        "server": nat_mcp_server_config(name, server),
+    }
+    # NeMo Agent Toolkit forbids include and exclude together. A non-empty Fabric allowlist is
+    # already the effective exposed set after the disjoint blocklist is applied.
+    if allowed is not None:
+        group["include"] = allowed
+    elif blocked:
+        group["exclude"] = blocked
+    return group
+
+
+def _apply_mcp_servers(config: dict[str, Any], agent_config: AgentConfig) -> set[str]:
+    servers = agent_config.mcp.servers if agent_config.mcp else {}
+    if not servers:
+        return set()
+
+    functions = config["functions"]
+    function_groups = config["function_groups"]
+    suppressed: set[str] = set()
+    tool_names: list[str] | None = None
+
+    for name, server in sorted(servers.items()):
+        if name in functions or name in function_groups:
+            raise _config_error(
+                "nat_mcp_name_conflict",
+                f"NeMo Agent Toolkit MCP server {name!r} conflicts with an existing function or function group",
+                server=name,
+            )
+
+        group = _mcp_group(name, server)
+        if group is None:
+            # An explicit empty allowlist means the server exposes no tools. It
+            # must not remain reachable through a pre-existing workflow ref.
+            existing_names = config["workflow"].get("tool_names")
+            if isinstance(existing_names, list):
+                existing_names[:] = [
+                    tool_name for tool_name in existing_names if tool_name != name
+                ]
+            suppressed.add(name)
+            continue
+
+        if tool_names is None:
+            tool_names = _workflow_tool_names(config, "Normalized MCP configuration")
+        function_groups[name] = group
+        if name not in tool_names:
+            tool_names.append(name)
+
+    return suppressed
+
+
+def _group_member_identity(name: str) -> tuple[str, str] | None:
+    if FUNCTION_GROUP_SEPARATOR not in name:
+        return None
+    group, member = name.split(FUNCTION_GROUP_SEPARATOR, 1)
+    if not group or not member:
+        return None
+    return group, member
+
+
+def _group_mapping(groups: dict[str, Any], name: str) -> dict[str, Any] | None:
+    value = groups.get(name)
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise _config_error(
+            "nat_invalid_harness_settings",
+            f"NeMo Agent Toolkit function group {name!r} must be a mapping",
+            group=name,
+        )
+    return value
+
+
+def _unknown_tool_selector(selector: str) -> lifecycle.LifecycleError:
+    return _config_error(
+        "nat_unknown_tool_selector",
+        f"Fabric tool selector {selector!r} does not match a configured NeMo Agent Toolkit function or function group",
+        selector=selector,
+    )
+
+
+def _validate_tool_selectors(
+    config: dict[str, Any],
+    selectors: list[str],
+    suppressed: set[str],
+    *,
+    enabling: bool,
+) -> None:
+    functions = config["functions"]
+    groups = config["function_groups"]
+    for selector in selectors:
+        if selector in suppressed:
+            raise _unknown_tool_selector(selector)
+        if selector in functions or selector in groups:
+            continue
+        member = _group_member_identity(selector)
+        if member is None:
+            raise _unknown_tool_selector(selector)
+        group = _group_mapping(groups, member[0])
+        if group is None:
+            raise _unknown_tool_selector(selector)
+        if not enabling:
+            continue
+
+        include = _string_list(group.get("include"), "function group include") or []
+        exclude = _string_list(group.get("exclude"), "function group exclude") or []
+        if (include and member[1] not in include) or member[1] in exclude:
+            raise _unknown_tool_selector(selector)
+
+
+def _select_group_members(requested: list[str]) -> list[str]:
+    # Selector compatibility with existing include/exclude policy is validated
+    # before mutation. Preserve caller order while removing duplicates.
+    return list(dict.fromkeys(requested))
+
+
+def _apply_enabled_tools(
+    config: dict[str, Any], enabled: list[str], suppressed: set[str]
+) -> None:
+    functions = config["functions"]
+    groups = config["function_groups"]
+    selected_functions: dict[str, Any] = {}
+    selected_groups: dict[str, Any] = {}
+    selected_refs: list[str] = []
+
+    requested_members: dict[str, list[str]] = {}
+    for identity in enabled:
+        if identity in functions or identity in groups:
+            continue
+        member = _group_member_identity(identity)
+        if member is not None:
+            requested_members.setdefault(member[0], []).append(member[1])
+
+    for identity in enabled:
+        if identity in suppressed:
+            continue
+        if identity in functions:
+            selected_functions[identity] = functions[identity]
+            if identity not in selected_refs:
+                selected_refs.append(identity)
+            continue
+
+        if identity in groups:
+            selected_groups[identity] = groups[identity]
+            if identity not in selected_refs:
+                selected_refs.append(identity)
+            continue
+
+        member = _group_member_identity(identity)
+        if member is None:
+            continue
+        group_name, _ = member
+        if group_name in suppressed or group_name in selected_groups:
+            continue
+        group = _group_mapping(groups, group_name)
+        if group is None:
+            continue
+        selected = _select_group_members(requested_members[group_name])
+        if not selected:
+            continue
+        selected_group = copy.deepcopy(group)
+        selected_group["include"] = selected
+        selected_group.pop("exclude", None)
+        selected_groups[group_name] = selected_group
+        if group_name not in selected_refs:
+            selected_refs.append(group_name)
+
+    functions.clear()
+    functions.update(selected_functions)
+    groups.clear()
+    groups.update(selected_groups)
+    config["workflow"]["tool_names"] = selected_refs
+
+
+def _block_group_member(
+    config: dict[str, Any], group_name: str, member_name: str
+) -> None:
+    groups = config["function_groups"]
+    group = _group_mapping(groups, group_name)
+    if group is None:
+        return
+
+    include = _string_list(group.get("include"), "function group include") or []
+    if include:
+        remaining = [name for name in include if name != member_name]
+        if remaining:
+            group["include"] = remaining
+            return
+        groups.pop(group_name, None)
+        tool_names = config["workflow"]["tool_names"]
+        tool_names[:] = [name for name in tool_names if name != group_name]
+        return
+
+    exclude = _string_list(group.get("exclude"), "function group exclude") or []
+    if member_name not in exclude:
+        group["exclude"] = [*exclude, member_name]
+
+
+def _apply_blocked_tools(config: dict[str, Any], blocked: list[str]) -> None:
+    functions = config["functions"]
+    groups = config["function_groups"]
+    tool_names = config["workflow"]["tool_names"]
+
+    for identity in blocked:
+        if identity in functions:
+            functions.pop(identity, None)
+            tool_names[:] = [name for name in tool_names if name != identity]
+            continue
+        if identity in groups:
+            groups.pop(identity, None)
+            tool_names[:] = [name for name in tool_names if name != identity]
+            continue
+        member = _group_member_identity(identity)
+        if member is not None:
+            _block_group_member(config, *member)
+
+
+def _apply_tool_policy(
+    config: dict[str, Any], agent_config: AgentConfig, suppressed: set[str]
+) -> None:
+    tools = agent_config.tools
+    enabled = _string_list(
+        tools.enabled if tools else None,
+        "tools.enabled",
+        optional=True,
+    )
+    blocked = _string_list(
+        tools.blocked if tools else [],
+        "tools.blocked",
+    )
+    assert blocked is not None
+    if enabled is None and not blocked:
+        return
+
+    _workflow_tool_names(config, "Normalized tool policy")
+    if enabled is not None:
+        _validate_tool_selectors(
+            config,
+            enabled,
+            suppressed,
+            enabling=True,
+        )
+    _validate_tool_selectors(
+        config,
+        blocked,
+        suppressed,
+        enabling=False,
+    )
+    if enabled is not None:
+        _apply_enabled_tools(config, enabled, suppressed)
+    else:
+        config["workflow"]["tool_names"] = [
+            name for name in config["workflow"]["tool_names"] if name not in suppressed
+        ]
+    if blocked:
+        _apply_blocked_tools(config, blocked)
+
+
+def apply_nat_capabilities(config: dict[str, Any], agent_config: AgentConfig) -> None:
+    """Compile normalized MCP routing and tool policy into a raw NeMo Agent Toolkit config."""
+
+    suppressed = _apply_mcp_servers(config, agent_config)
+    _apply_tool_policy(config, agent_config, suppressed)
+
+
+def build_nat_config_mapping(agent_config: AgentConfig) -> dict[str, Any]:
+    """Build the raw in-memory NeMo Agent Toolkit mapping from typed southbound config."""
+
+    config = _nat_component_settings(agent_config)
+    llms = _nat_llms(agent_config)
+    if llms:
+        config["llms"] = llms
+    _apply_system_instruction(config, agent_config)
+    apply_nat_capabilities(config, agent_config)
+    return config
+
+
+def build_nat_config(agent_config: AgentConfig) -> Any:
+    """Build and validate a typed NeMo Agent Toolkit Config without a workflow YAML file."""
+
+    raw_config = build_nat_config_mapping(agent_config)
+
+    try:
+        from nat.runtime.loader import PluginTypes
+        from nat.runtime.loader import discover_and_register_plugins
+
+        discover_and_register_plugins(PluginTypes.CONFIG_OBJECT)
+
+        from nat.data_models.config import Config
+
+        return Config.model_validate(raw_config)
+    except lifecycle.LifecycleError:
+        raise
+    except Exception as error:
+        raise _config_error(
+            "nat_config_translation_failed",
+            "Fabric config could not be translated into a valid NeMo Agent Toolkit config",
+        ) from error
+
+
+def _session_kwargs(
+    request: AgentRunRequest,
+    runtime_context: RuntimeContext,
+) -> dict[str, str]:
+    context = request.context
+    values = {
+        "user_id": context.get("user_id"),
+        "conversation_id": context.get("conversation_id"),
+        "user_message_id": context.get("user_message_id") or runtime_context.request_id,
+    }
+    result: dict[str, str] = {}
+    for name, value in values.items():
+        if value is None:
+            continue
+        if not isinstance(value, str) or not value:
+            raise ValueError(
+                f"NeMo Agent Toolkit invocation request context {name} must be a non-empty string"
+            )
+        result[name] = value
+    return result
+
+
+def _success_output(response: Any) -> AgentRunResult:
+    return AgentRunResult(
+        status=AgentRunStatus.SUCCEEDED,
+        output={
+            "harness": HARNESS,
+            "adapter": "python",
+            "mode": MODE,
+            "response": response,
+            "completed": True,
+        },
+    )
+
+
+def _failure_output(code: str, message: str) -> AgentRunResult:
+    return AgentRunResult(
+        status=AgentRunStatus.FAILED,
+        output={
+            "harness": HARNESS,
+            "adapter": "python",
+            "mode": MODE,
+            "response": None,
+            "completed": False,
+        },
+        error=AgentRunError(code=code, message=message),
+    )
+
+
+async def _close_after_failed_start(stack: AsyncExitStack) -> None:
+    try:
+        await stack.aclose()
+    except asyncio.CancelledError:
+        raise
+    except Exception as error:
+        LOGGER.error(
+            "NeMo Agent Toolkit workflow cleanup failed after start error (error_type=%s)",
+            type(error).__name__,
+        )
+
+
+class NatRuntime:
+    """One NeMo Agent Toolkit WorkflowBuilder and SessionManager owned by a Fabric runtime."""
+
+    def __init__(self) -> None:
+        self._runtime_id: str | None = None
+        self._sessions: Any = None
+        self._exit_stack: AsyncExitStack | None = None
+
+    def _invocation_failure(
+        self,
+        runtime_context: RuntimeContext,
+    ) -> AgentRunResult | None:
+        """Validate common invocation state and return a safe failure."""
+
+        if self._sessions is None or self._runtime_id is None:
+            raise lifecycle.LifecycleError(
+                "nat_runtime_not_started",
+                "NeMo Agent Toolkit runtime is not started",
+            )
+        if runtime_context.runtime_id != self._runtime_id:
+            raise lifecycle.LifecycleError(
+                "nat_runtime_mismatch",
+                "NeMo Agent Toolkit invocation does not match the active runtime",
+            )
+        return None
+
+    async def start(self, payload: dict[str, Any]) -> None:
+        if self._exit_stack is not None:
+            raise lifecycle.LifecycleError(
+                "nat_runtime_already_started",
+                "NeMo Agent Toolkit runtime is already started",
+            )
+
+        runtime_id = _runtime_id(payload)
+        agent_config = _agent_config(payload)
+        stack = AsyncExitStack()
+        try:
+            from nat.builder.workflow_builder import WorkflowBuilder
+            from nat.runtime.session import SessionManager
+
+            config = build_nat_config(agent_config)
+            builder = await stack.enter_async_context(
+                WorkflowBuilder.from_config(config=config)
+            )
+            sessions = await SessionManager.create(
+                config=config,
+                shared_builder=builder,
+            )
+            stack.push_async_callback(sessions.shutdown)
+        except asyncio.CancelledError:
+            await _close_after_failed_start(stack)
+            raise
+        except lifecycle.LifecycleError:
+            await _close_after_failed_start(stack)
+            raise
+        except Exception as error:
+            await _close_after_failed_start(stack)
+            raise lifecycle.LifecycleError(
+                "nat_workflow_start_failed",
+                "NeMo Agent Toolkit workflow failed to load; inspect adapter stderr for details",
+            ) from error
+
+        self._runtime_id = runtime_id
+        self._sessions = sessions
+        self._exit_stack = stack
+
+    async def invoke(
+        self,
+        request: AgentRunRequest,
+        runtime_context: RuntimeContext,
+    ) -> AgentRunResult:
+        failure = self._invocation_failure(runtime_context)
+        if failure is not None:
+            return failure
+        try:
+            session_kwargs = _session_kwargs(request, runtime_context)
+        except ValueError as error:
+            return _failure_output("nat_invalid_request", str(error))
+
+        try:
+            from nat.data_models.runtime_enum import RuntimeTypeEnum
+
+            async with self._sessions.session(**session_kwargs) as session:
+                async with session.run(
+                    request.input,
+                    runtime_type=RuntimeTypeEnum.RUN_OR_SERVE,
+                ) as runner:
+                    result = await runner.result()
+        except asyncio.CancelledError:
+            raise
+        except Exception as error:
+            LOGGER.error(
+                "NeMo Agent Toolkit workflow invocation failed (error_type=%s)",
+                type(error).__name__,
+            )
+            return _failure_output(
+                "nat_workflow_invoke_failed",
+                "NeMo Agent Toolkit workflow invocation failed; inspect adapter stderr for details",
+            )
+
+        try:
+            from pydantic_core import to_jsonable_python
+
+            response = to_jsonable_python(result, serialize_unknown=False)
+        except (TypeError, ValueError) as error:
+            LOGGER.error(
+                "NeMo Agent Toolkit workflow returned a non-JSON result (error_type=%s)",
+                type(error).__name__,
+            )
+            return _failure_output(
+                "nat_result_not_json_serializable",
+                "NeMo Agent Toolkit workflow returned a result that cannot be represented as JSON",
+            )
+        return _success_output(response)
+
+    async def invoke_openai_stream(
+        self,
+        request: AgentRunRequest,
+        runtime_context: RuntimeContext,
+        emit: lifecycle.OpenAIChunkEmitter,
+    ) -> AgentRunResult:
+        """Forward one NeMo Agent Toolkit result stream declared as OpenAI chunks."""
+
+        failure = self._invocation_failure(runtime_context)
+        if failure is not None:
+            return failure
+        assert self._sessions is not None
+
+        try:
+            from nat.data_models.api_server import ChatResponseChunk
+
+            streaming_output_schema = (
+                self._sessions.get_workflow_streaming_output_schema()
+            )
+        except Exception as error:
+            LOGGER.error(
+                "NeMo Agent Toolkit workflow streaming schema lookup failed (error_type=%s)",
+                type(error).__name__,
+            )
+            return _failure_output(
+                "nat_workflow_stream_failed",
+                "NeMo Agent Toolkit workflow streaming failed; inspect adapter stderr for details",
+            )
+
+        if streaming_output_schema is not ChatResponseChunk:
+            return _failure_output(
+                "nat_openai_stream_unsupported_schema",
+                "Native NeMo Agent Toolkit OpenAI streaming requires a ChatResponseChunk output schema",
+            )
+
+        try:
+            session_kwargs = _session_kwargs(request, runtime_context)
+        except ValueError as error:
+            return _failure_output("nat_invalid_request", str(error))
+
+        response_parts: list[str] = []
+        try:
+            from nat.data_models.runtime_enum import RuntimeTypeEnum
+            from pydantic_core import to_jsonable_python
+
+            async with self._sessions.session(**session_kwargs) as session:
+                async with session.run(
+                    request.input,
+                    runtime_type=RuntimeTypeEnum.RUN_OR_SERVE,
+                ) as runner:
+                    stream = runner.result_stream(to_type=ChatResponseChunk)
+
+                    async def close_stream() -> None:
+                        close = getattr(stream, "aclose", None)
+                        if callable(close):
+                            await close()
+
+                    try:
+                        async for chunk in stream:
+                            try:
+                                serialized = to_jsonable_python(
+                                    chunk,
+                                    serialize_unknown=False,
+                                )
+                            except asyncio.CancelledError:
+                                raise
+                            except lifecycle.LifecycleError:
+                                raise
+                            except Exception as error:
+                                raise _NatStreamSerializationError from error
+                            if not isinstance(serialized, dict):
+                                raise _NatStreamSerializationError
+
+                            await emit(serialized)
+                            for choice in serialized.get("choices", []):
+                                if not isinstance(choice, dict):
+                                    continue
+                                if choice.get("index") != 0:
+                                    continue
+                                delta = choice.get("delta")
+                                if not isinstance(delta, dict):
+                                    continue
+                                content = delta.get("content")
+                                if isinstance(content, str):
+                                    response_parts.append(content)
+                    except BaseException:
+                        try:
+                            await close_stream()
+                        except BaseException as error:
+                            LOGGER.error(
+                                "NeMo Agent Toolkit workflow stream cleanup failed while preserving "
+                                "the primary failure (error_type=%s)",
+                                type(error).__name__,
+                            )
+                        raise
+                    else:
+                        await close_stream()
+        except asyncio.CancelledError:
+            raise
+        except lifecycle.LifecycleError:
+            raise
+        except _NatStreamSerializationError as error:
+            LOGGER.error(
+                "NeMo Agent Toolkit workflow returned a non-JSON stream chunk (error_type=%s)",
+                type(error.__cause__ or error).__name__,
+            )
+            return _failure_output(
+                "nat_stream_chunk_not_json_serializable",
+                "NeMo Agent Toolkit workflow returned a stream chunk that cannot be represented as JSON",
+            )
+        except Exception as error:
+            LOGGER.error(
+                "NeMo Agent Toolkit workflow streaming failed (error_type=%s)",
+                type(error).__name__,
+            )
+            return _failure_output(
+                "nat_workflow_stream_failed",
+                "NeMo Agent Toolkit workflow streaming failed; inspect adapter stderr for details",
+            )
+
+        return _success_output("".join(response_parts))
+
+    async def stop(self) -> None:
+        stack = self._exit_stack
+        self._runtime_id = None
+        self._sessions = None
+        self._exit_stack = None
+
+        if stack is None:
+            return
+        try:
+            await stack.aclose()
+        except asyncio.CancelledError:
+            raise
+        except Exception as error:
+            raise lifecycle.LifecycleError(
+                "nat_runtime_stop_failed",
+                "NeMo Agent Toolkit runtime failed to stop cleanly",
+            ) from error
+
+
+if __name__ == "__main__":
+    main()

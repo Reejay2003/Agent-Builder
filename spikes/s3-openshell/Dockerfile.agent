@@ -1,0 +1,10 @@
+FROM nvcr.io/nvidia/base/ubuntu:24.04
+RUN apt-get update && apt-get install -y --no-install-recommends python3 python3-venv curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+RUN python3 -m venv /opt/venv && /opt/venv/bin/pip install --no-cache-dir -q uv \
+    && /opt/venv/bin/uv pip install --python /opt/venv/bin/python -q \
+       packaging "nvidia-nat-core==1.9.0" "nvidia-nat-langchain[all]==1.9.0" "nvidia-nat-mcp==1.9.0" \
+       "nemo-fabric==0.4.0" "nemo-fabric-adapter-contract==0.4.0" "nemo-fabric-adapters-common==0.4.0"
+COPY --chown=1000:1000 agent/ /opt/agent/
+ENV PYTHONPATH=/opt/agent/src PATH=/opt/venv/bin:$PATH
+WORKDIR /opt/agent

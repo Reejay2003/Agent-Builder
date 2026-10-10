@@ -17,3 +17,12 @@ Gotchas:
 - Policies are enforced per binary path (the allow rule names /usr/bin/curl).
 
 Not done yet: running the S2 Fabric + NAT run inside the sandbox. Needs an image with Python 3.12, nvidia-nat, nemo-fabric and the adapter, plus a policy allowing openrouter.ai for the python binary.
+
+## Part 2: S2 agent inside the sandbox (in progress)
+- `Dockerfile.agent` builds Python 3.12 + NAT 1.9.0 + Fabric 0.4.0 (pinned), `policy-agent.yaml` is filesystem/process only,
+  `provider-openrouter.yaml` is NVIDIA's OpenRouter profile with `binaries` edited to our Python. The key is held by an OpenShell
+  provider (`openshell provider create --name openrouter --type openrouter --from-existing`), not baked into the image.
+- Reached: sandbox starts and the agent boots NAT. Fixed on the way: `/opt/agent` must be owned by uid 1000 (`COPY --chown`), and the
+  image needs `nvidia-nat-langchain[all]` (langchain-openai).
+- Blocked by: Mac disk full (139 MB free) which made Docker's VM read-only. Needs space freed and Docker Desktop restarted, then rerun:
+  `openshell sandbox create --name s3-agent --from agent-builder/s3-agent:0.1 --policy policy-agent.yaml --provider openrouter --no-keep -- python /opt/agent/run_calculator.py`

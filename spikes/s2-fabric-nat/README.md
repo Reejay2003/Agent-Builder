@@ -1,7 +1,9 @@
 # S2: NAT via Fabric (passed 2026-10-10)
 
-NeMo Fabric 0.4.0 (Apache-2.0) runs a NAT 1.9.0 workflow through the source-only NAT reference adapter
+NeMo Fabric (Apache-2.0) runs a NAT 1.9.0 workflow through the source-only NAT reference adapter
 (copied from NeMo-Fabric v0.4.0 `external/nat`, Apache-2.0, see LICENSE-NVIDIA-Fabric).
+
+**Version note:** the local S2 run used Fabric **0.5.0b3** (pre-release; `--prerelease=allow` pulled it). The adapter source is from the v0.4.0 tag and worked unchanged. Stable 0.4.0 is being verified inside the S3 sandbox image (pinned).
 
 Setup (repo-root .venv): `uv pip install --prerelease=allow nemo-fabric nemo-fabric-adapter-contract nemo-fabric-adapters-common`
 Run:

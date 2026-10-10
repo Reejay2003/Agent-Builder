@@ -1,0 +1,15 @@
+# Agent sandbox: filesystem + process only. Network access comes from the attached provider profile
+# (openrouter.ai:443 for the Python binary); everything else is denied.
+version: 1
+
+filesystem_policy:
+  include_workdir: false
+  read_only: [/usr, /lib, /etc, /opt/venv, /opt/agent/src, /opt/agent/targets]
+  read_write: [/tmp, /opt/agent]
+
+landlock:
+  compatibility: best_effort
+
+process:
+  run_as_user: "1000"
+  run_as_group: "1000"

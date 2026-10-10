@@ -1,0 +1,29 @@
+{
+  "contract_version": "fabric.adapter/v1alpha2",
+  "type": "workflow",
+  "id": "nvidia.examples.nat.email-phishing-analyzer",
+  "adapter_id": "nvidia.fabric.nat",
+  "spec": {
+    "entrypoint": {
+      "kind": "factory",
+      "ref": "fabric.agent.react"
+    },
+    "settings_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "llm_name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Named normalized model role used by the NAT ReAct workflow."
+        },
+        "use_native_tool_calling": {
+          "type": "boolean",
+          "description": "Whether the NAT ReAct workflow uses native model tool calling."
+        }
+      },
+      "required": ["llm_name"],
+      "additionalProperties": false
+    }
+  }
+}
