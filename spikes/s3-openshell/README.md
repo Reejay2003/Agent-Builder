@@ -18,11 +18,25 @@ Gotchas:
 
 Not done yet: running the S2 Fabric + NAT run inside the sandbox. Needs an image with Python 3.12, nvidia-nat, nemo-fabric and the adapter, plus a policy allowing openrouter.ai for the python binary.
 
-## Part 2: S2 agent inside the sandbox (in progress)
-- `Dockerfile.agent` builds Python 3.12 + NAT 1.9.0 + Fabric 0.4.0 (pinned), `policy-agent.yaml` is filesystem/process only,
-  `provider-openrouter.yaml` is NVIDIA's OpenRouter profile with `binaries` edited to our Python. The key is held by an OpenShell
-  provider (`openshell provider create --name openrouter --type openrouter --from-existing`), not baked into the image.
-- Reached: sandbox starts and the agent boots NAT. Fixed on the way: `/opt/agent` must be owned by uid 1000 (`COPY --chown`), and the
-  image needs `nvidia-nat-langchain[all]` (langchain-openai).
-- Blocked by: Mac disk full (139 MB free) which made Docker's VM read-only. Needs space freed and Docker Desktop restarted, then rerun:
-  `openshell sandbox create --name s3-agent --from agent-builder/s3-agent:0.1 --policy policy-agent.yaml --provider openrouter --no-keep -- python /opt/agent/run_calculator.py`
+## Part 2: S2 agent inside the sandbox (passed 2026-10-10)
+Fabric 0.4.0 (stable, pinned) + NAT 1.9.0 + the NAT adapter ran the calculator agent inside an OpenShell sandbox:
+`RunResult.status = succeeded`, response "42.0", about 9.5 s end to end including the LLM call.
+
+Files: `Dockerfile.agent`, `policy-agent.yaml` (filesystem/process only), `provider-openrouter.yaml` (NVIDIA's OpenRouter profile,
+`binaries` edited to our Python). Run:
+```
+openshell provider profile import -f provider-openrouter.yaml --global
+set -a; . ../../.env; set +a; openshell provider create --name openrouter --type openrouter --from-existing
+docker build -f Dockerfile.agent -t agent-builder/s3-agent:0.1 .
+openshell sandbox create --name s3-run --from agent-builder/s3-agent:0.1 --policy policy-agent.yaml --provider openrouter --no-tty --no-keep -- python /opt/agent/run_calculator.py
+```
+Containment checks from Python inside that sandbox:
+- openrouter.ai:443 allowed (HTTP 200); example.com and api.github.com blocked (Permission denied).
+- `OPENROUTER_API_KEY` inside the sandbox is a placeholder (`openshel...`), not the real key; OpenShell substitutes it for openrouter.ai only.
+
+Gotchas found:
+- `COPY --chown=1000:1000` so the sandbox user can write `/opt/agent`; the image needs `nvidia-nat-langchain[all]`.
+- A Docker build during a full disk silently produced 0-byte files and a bad image; rebuild with `--no-cache` after freeing space.
+- `--no-keep` sandboxes delete on exit and may keep their name for a few seconds ("already exists").
+- Pin `nemo-fabric==0.4.0`; installing with `--prerelease=allow` pulls 0.5.0b3.
+- Plan impact: per-tool egress via provider profiles (binaries + host) fits compiler C; secrets never enter the sandbox.
