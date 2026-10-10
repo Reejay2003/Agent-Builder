@@ -1,4 +1,4 @@
-# Agent Builder Platform: Master Plan (v7)
+# Agent Builder Platform: Master Plan (v8)
 
 Last updated: 2026-10-08. Personal open-source project on GitHub. No revenue, no funding, so **everything must be free or open source** (section 3).
 
@@ -8,6 +8,13 @@ Tags used for facts:
 - **[memory]**: from my background knowledge, not checked this session; confirm before adopting
 
 ## 0. Changes
+
+### v8
+1. **New section 4.3: the LLM layer** (gateway, model routing, agent mode). Evidence from S2b: our NAT ReAct agent failed about half its runs on free models with `ReActAgentParsingFailedError` (model replied in the wrong text format, or returned nothing). Plain NAT failed the same way, so it is a model/agent-type problem, not a NAT-Fabric incompatibility. A gateway cannot repair that.
+2. **Native tool calling becomes the default agent mode; ReAct is the fallback** for models without function calling (small local models). The AgentSpec gains `model.agent_mode: auto | tool_calling | react` and a capability tier; compiler A picks the NAT workflow type from it. NAT ships `tool_calling_agent` **[verified: used in its `examples/agents/tool_calling` config]**; the Fabric NAT adapter only supports `react_agent` today **[verified in its README]**, so S14 checks whether a tool-calling target is feasible or we write our own adapter target.
+3. **NeMo Switchyard (NVIDIA, Apache-2.0, pre-1.0, v0.3.0 on PyPI as `nemo-switchyard`)** evaluated as an **optional model-routing layer**, not the default gateway and not a format fixer **[verified: README and NVIDIA blog]**. See 4.3 for what it is, its limits and why.
+4. **Default gateway:** keep the OpenAI-compatible BYOK interface; OpenRouter or LiteLLM (MIT **[verified on PyPI]**) behind it. OpenShell already holds the key and routes inference, so the gateway sits on the host side of that boundary.
+5. **New spike S14** (tool calling across models through Fabric, plus a Switchyard trial); BOM, risks, ADR list and links updated. Also: the OpenRouter free tier is 50 requests a day **[verified: HTTP 429 response]**, so Evals-phase work needs paid credits or local models.
 
 ### v7
 1. **`pgvector_lite` is now the default retrieval engine; NeMo Retriever is optional.** The dev machine is a Mac with no NVIDIA GPU, and NeMo Retriever's local inference needs one (hosted endpoints are dev/test only, section 3.4). The zero-spend path must work out of the box. NeMo Retriever stays a selectable engine (`--profile gpu`, or hosted endpoint for prototyping). Wherever v6 text below says NeMo Retriever is the default, read it as optional.
@@ -104,6 +111,8 @@ The "Systems of record" column is what the Integration layer connects; the "Chan
 | Guardrails | NeMo Guardrails | Apache-2.0 **[memory]** | Self-hosted Python library |
 | Evals | NAT built-in eval + NeMo Evaluator + garak | Evaluator Apache-2.0 **[verified]**; garak Apache-2.0 **[memory]** | Evaluator needs Docker for code sandboxes; no GPU or Kubernetes mentioned |
 | LLM | User's own key, or **Ollama** local models | Ollama MIT **[memory]** | OpenShell's community catalog lists an `ollama` sandbox **[secondary]**. Small local models make weak agents; expect that |
+| LLM gateway (optional, behind the BYOK interface) | OpenRouter (hosted) or **LiteLLM** (self-hosted) | LiteLLM MIT **[verified on PyPI]**; OpenRouter is a service with a free tier of 50 requests/day **[verified]** | One OpenAI-style API over many providers, retries, fallbacks, usage tracking. Does not fix wrong output formats |
+| Model routing (optional, later) | **NeMo Switchyard** (`nemo-switchyard` 0.3.0) | Apache-2.0 **[verified]**; pre-1.0, APIs may change | Cost/quality routing across models. Its standalone server is labelled demo, not for production; LiteLLM integration is experimental. See 4.3 |
 | Hosted LLM for dev | build.nvidia.com free endpoints | Prototyping only: rate-limited, credit amounts not stated, "trial experience", production serving needs AI Enterprise **[verified]** | Fine for development, not a foundation |
 | Authorization | OPA | Apache-2.0 **[memory]** | OpenShell also compiles its YAML policies to OPA/Rego **[secondary]** |
 | Login | Keycloak (or simple local auth for MVP) | Apache-2.0 **[memory]** | MVP can start with a single local user |
@@ -173,7 +182,7 @@ Fabric and NAT run **inside** the OpenShell sandbox. The control plane **writes*
 ### 4.2 End-to-end pipeline
 ```
 Wizard answers -> AgentSpec (versioned YAML/JSON in Postgres)
-   -> compiler A: NAT workflow YAML   (agent, LLM ref, tools via MCP)
+   -> compiler A: NAT workflow YAML   (agent, LLM ref, tools via MCP, workflow type from model.agent_mode)
    -> compiler B: FabricConfig        (NAT adapter target, MCP, telemetry via Relay)
    -> compiler C: OpenShell policy    (egress hosts, paths, process rules per tool)
    -> compiler D: OPA bundle + Guardrails config
@@ -182,6 +191,27 @@ Wizard answers -> AgentSpec (versioned YAML/JSON in Postgres)
    -> Fabric plan + doctor (pre-flight) -> run inside OpenShell sandbox
    -> Relay events (ATOF) -> ATIF trajectories -> eval + trace UI
 ```
+
+### 4.3 The LLM layer: gateway, routing and agent mode
+The platform must run with many kinds of models, so model differences are handled in three separate places. Mixing them up is what made the parsing error look like a gateway problem.
+
+| Problem | Where it is fixed | Tool |
+|---|---|---|
+| Different provider APIs, keys, retries, fallbacks, rate limits, usage | **Gateway** | OpenRouter or LiteLLM behind our OpenAI-compatible BYOK interface; the key stays outside the sandbox (OpenShell provider, S3) |
+| Which model should serve which step (cost vs quality) | **Model routing**, optional | NeMo Switchyard (below) |
+| The model answers in the wrong shape (ReAct text that will not parse) | **Agent mode** | Native tool calling by default; ReAct only as fallback; output repair; eval gate |
+
+**Agent mode (the real fix for the S2b failures).** `model.agent_mode: auto` resolves from a capability table kept in `packages/model-capabilities/` (does the model support function calling, streaming, JSON mode, context size, a reliability tier from our evals). `tool_calling` is used when supported, `react` otherwise. Compiler A emits the matching NAT workflow type. If a model is too weak for a template, the wizard says so before the user builds on it. On a parse failure the runner resends the format error once; repeated failures are reported, not hidden.
+
+**NeMo Switchyard: what it is and how we would use it** **[verified: github.com/NVIDIA-NeMo/Switchyard and the NVIDIA blog]**
+- An open-source layer that routes each step of an agent to a model. It keeps routing logic separate from provider endpoints (semantic model names map to provider endpoints and model IDs), exposes OpenAI, Anthropic and Responses-compatible endpoints, and logs the chosen model, rationale, tokens, latency and outcome.
+- Routers: LLM classifier (a judge picks the model, with session affinity), stage router (reads recent tool activity), escalation router (start cheap, move to a stronger model when the session struggles), and a tunable prefill router. `nvidia/switchyard` is the model name clients send for automatic routing.
+- Integrations: gateway use, local proxy, embedding in your own harness, a **NeMo Relay plugin** (needs Relay `>=0.8.0, <1.0.0`; Relay 0.8.x and 0.9.0 can lose upstream error status when the plugin is enabled) and a LiteLLM plugin.
+- **Limits that decide our use of it:** pre-1.0 (APIs and routing behaviour can change); `switchyard-server` is marked demo, not for production; the LiteLLM route is experimental and cannot serve classifier or escalation algorithms; tool-call and streaming translation between the OpenAI and Anthropic dialects is not described, so it is not a proven format translator; it needs Python plus a Rust toolchain for some paths; the savings figures in the blog are vendor or partner reported (for example LangChain's 74% cost reduction on 145 tasks) and not independently verified; its README itself says a cheaper call does not guarantee a cheaper completed task. NAT, Fabric and OpenShell integration is not mentioned.
+- **Decision:** not in the MVP path. We add it behind our gateway interface as an optional **routing provider** for users with several models or paid keys, after S14 shows what it does for our agents. A user with one free model gains nothing from it. It is a good fit later for the escalation pattern (small model first, strong model when stuck), which also helps the free-model quality problem.
+- Fit with the stack: Relay is already our telemetry layer, so its plugin is the natural attachment point, but the version range and the error-status caveat must be tested against our pinned Relay (S4, S14).
+
+**Free-tier reality:** OpenRouter's free tier is 50 requests a day **[verified]**; 10 credits unlock 1000 free-model requests a day. Local Ollama models have no quota but are weak tool callers. Eval runs (Phase 5) need either credits or a local model with a stated quality floor.
 
 ## 5. The AgentSpec (the one stable contract)
 ```yaml
@@ -193,6 +223,9 @@ model:
   base_url: https://api.openai.com/v1
   model: gpt-...
   credential_ref: secret://llm/primary # never the key itself
+  agent_mode: auto                     # auto | tool_calling | react; auto reads packages/model-capabilities
+  capability_tier: standard            # filled from the capability table / evals; the wizard warns on weak tiers
+  routing: null                        # optional: { provider: switchyard, algorithm: escalation, models: [...] }
 instructions: { persona: "...", rules: ["..."] }
 tools: [ {id: gmail.read}, {id: gmail.send_draft}, {id: calendar.create_event} ]
 knowledge:                             # section 8; omit for agents that need none
@@ -501,11 +534,12 @@ Speech providers (pluggable):  open-source ASR/TTS (default, CPU-friendly)  |  N
 | S9 RAG baseline | Ingest about 50 real documents (including a few resumes) with **NeMo Retriever** (hosted endpoint if no GPU) and with the pgvector lite backend; compare retrieval quality, file-type coverage, Hindi/English, and CPU vs GPU/hosted latency; parse a resume into the `candidate_v1` schema | Hit rate, abstention behaviour, p95 latency, and the resume field accuracy before and after user confirmation |
 | S10 NAT retrievers and RAG evals | Read the NAT retrievers and "Adding a Retriever" docs; check whether NeMo Retriever has hybrid search, reranking and metadata filters, and whether NAT can use it as a retriever; test whether NAT eval or Evaluator can score RAG | Written decision: own MCP service around NeMo Retriever, NAT custom retriever, or both; chosen RAG eval tool |
 | S13 NeMo Retriever multi-tenancy | Create two tenants' collections in LanceDB; try cross-tenant queries, metadata filters, delete-and-verify-erased, re-embed into a new versioned index | Isolation holds under attack tests; erasure is real; decision on one-collection-per-tenant vs filters; default engine decision |
+| S14 Tool calling and gateway | (a) Run our `simple-agent` as a NAT `tool_calling_agent` and as `react_agent` on 3 to 4 models (a free one, a local Ollama one, a stronger paid one) and score pass rate over 10+ runs each, logging raw responses to tell empty output, 429 and wrong format apart. (b) Check whether the Fabric NAT adapter can take a tool-calling target or needs our own adapter target. (c) Put LiteLLM or OpenRouter behind the BYOK interface and run the same set. (d) Try Switchyard 0.3.0 as a local proxy with two models and, if feasible, its Relay plugin against our pinned Relay | A pass-rate table per model and agent mode; a decision on default agent mode, the capability table fields, whether Fabric needs a custom adapter, and whether Switchyard is worth enabling |
 
 | S11 Database connector | Point a read-only connector at a seeded Postgres and a SQLite file: introspect, map `customer` and `order` entities in a throwaway form, generate `customer.find` and `order.get` as MCP tools, call them from the S1 agent; then enable guarded NL-to-SQL and count how often a small local model writes a query the guard rejects or should have rejected | Agent answers "where is order 123" from the database with no hand-written tool code; privilege check refuses a read-write user; a list of guard rejections and misses |
 | S12 OpenAPI to tools | Feed a public OpenAPI spec (Petstore, then Zammad or OpenCATS) through FastMCP `from_openapi` or an alternative; wrap in manifests; tier by HTTP method; call through the gateway | Generated tools work end to end; choice of generator library with its licence recorded in the S7 table |
 
-S9 to S13 may spill into week 3 without blocking Phase 1, because Phase 1 uses the personal-automation template, which depends on neither RAG nor connectors beyond Google OAuth.
+S9 to S14 may spill into week 3 without blocking Phase 1, because Phase 1 uses the personal-automation template, which depends on neither RAG nor connectors beyond Google OAuth.
 
 ## 13. Roadmap after Phase 0
 
@@ -538,14 +572,15 @@ agent-platform/
   packages/demo-data/        # synthetic datasets per template for test mode
   packages/tool-manifests/   # one manifest per catalog tool
   packages/templates/        # per-template instructions, rails, evals, policy presets
+  packages/model-capabilities/ # per-model: tool calling, streaming, JSON mode, context, reliability tier (from evals)
   policies/                  # Rego bundles, OpenShell policy presets, Colang configs
   evals/                     # suites per template
   evals/rag/                 # golden sets, retrieval and grounding metrics
   deploy/compose/            # docker-compose for the local-first stack
-  spikes/                    # S1..S13
+  spikes/                    # S1..S14
   docs/                      # this plan, ADRs, licence table
 ```
-Write ADRs for: NAT-as-agent-layer, OpenShell tenancy model, Helix decision, telemetry source of truth, where OPA and Guardrails hook in, speech provider interface, knowledge service as own MCP service vs NAT retriever, embedding model and versioning policy, how tenant scope is injected, semantic model and tool generation from connectors, NL-to-SQL guard policy, channel and trigger identity model.
+Write ADRs for: NAT-as-agent-layer, OpenShell tenancy model, Helix decision, telemetry source of truth, where OPA and Guardrails hook in, speech provider interface, knowledge service as own MCP service vs NAT retriever, embedding model and versioning policy, how tenant scope is injected, semantic model and tool generation from connectors, NL-to-SQL guard policy, channel and trigger identity model, agent mode selection and the model capability table, gateway choice (OpenRouter vs LiteLLM) and Switchyard's optional role.
 
 ## 15. Risks
 1. **Scope.** Mitigation: vertical slice first, caller agents last.
@@ -556,6 +591,9 @@ Write ADRs for: NAT-as-agent-layer, OpenShell tenancy model, Helix decision, tel
 6. **Helix overlap.** Mitigation: S5, then sharpen positioning on guided UX.
 7. **BYOK security and tenant isolation.** Mitigation: design secrets first, security review.
 8. **Voice cost and regulation.** Mitigation: optional, last, free WebRTC path first.
+9b. **Model output-format failures** (S2b: ReAct parse errors on free models, about half of runs). Mitigation: native tool calling by default, ReAct fallback, one format-repair retry, capability table, eval gate that blocks weak model and template pairs, S14.
+9c. **Switchyard maturity** (pre-1.0, demo server, experimental LiteLLM path, vendor-reported benchmarks). Mitigation: optional provider behind our interface, never on the MVP path, evaluate in S14.
+9d. **Free-tier quotas** (50 requests a day on OpenRouter free). Mitigation: credits or local models for evals; cache and batch test runs; tell users in the wizard.
 9a. **NeMo Retriever fit.** GPU-centric, LanceDB/Milvus rather than pgvector, unverified production licence terms, early versioning (26.x). Mitigation: `RetrievalEngine` interface, pgvector_lite fallback, S7/S13 before making it the default.
 9. **Poor retrieval on messy real documents** (scans, tables, mixed languages). Mitigation: S9 on real files, parse previews in the wizard, hybrid search, and measured thresholds rather than guesses.
 10. **Indirect prompt injection through documents.** Mitigation: treat retrieved text as data, no authority from it, OPA, OpenShell and Tier 2 approval as backstops, injection tests in the eval suite.
@@ -579,6 +617,8 @@ Write ADRs for: NAT-as-agent-layer, OpenShell tenancy model, Helix decision, tel
 - OpenShell community sandboxes: https://github.com/NVIDIA/OpenShell-Community
 - NemoClaw architecture: https://docs.nvidia.com/nemoclaw/latest/about/how-it-works
 - NeMo Agent Toolkit docs (retrievers, embedders, "Adding a Retriever"; versions 1.0 to 1.8): https://docs.nvidia.com/nemo/agent-toolkit/1.8/build-workflows/retrievers.html
+- NeMo Switchyard (model routing): https://github.com/NVIDIA-NeMo/Switchyard and https://developer.nvidia.com/blog/route-ai-agent-workloads-across-models-with-nvidia-nemo-switchyard/
+- LiteLLM (gateway): https://github.com/BerriAI/litellm
 - NeMo Retriever library (GitHub, Apache-2.0): https://github.com/NVIDIA/NeMo-Retriever
 - NeMo Retriever docs and support matrix: https://nvidia.github.io/NeMo-Retriever/extraction/prerequisites-support-matrix/
 - NeMo Retriever (Nemotron embedding and reranking models): https://developer.nvidia.com/nemo-retriever/
