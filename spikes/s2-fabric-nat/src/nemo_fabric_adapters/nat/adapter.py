@@ -807,6 +807,9 @@ class NatRuntime:
                 "NeMo Agent Toolkit workflow invocation failed (error_type=%s)",
                 type(error).__name__,
             )
+            if os.environ.get("FABRIC_NAT_DEBUG") == "1":  # local debugging patch, not in upstream
+                import traceback, sys as _sys
+                traceback.print_exception(error, file=open(os.environ.get('FABRIC_NAT_DEBUG_FILE','/tmp/fabric-nat-debug.log'),'a'))
             return _failure_output(
                 "nat_workflow_invoke_failed",
                 "NeMo Agent Toolkit workflow invocation failed; inspect adapter stderr for details",
