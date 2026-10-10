@@ -15,6 +15,7 @@ Tags used for facts:
 3. **NeMo Switchyard (NVIDIA, Apache-2.0, pre-1.0, v0.3.0 on PyPI as `nemo-switchyard`)** evaluated as an **optional model-routing layer**, not the default gateway and not a format fixer **[verified: README and NVIDIA blog]**. See 4.3 for what it is, its limits and why.
 4. **Default gateway:** keep the OpenAI-compatible BYOK interface; OpenRouter or LiteLLM (MIT **[verified on PyPI]**) behind it. OpenShell already holds the key and routes inference, so the gateway sits on the host side of that boundary.
 5. **New spike S14** (tool calling across models through Fabric, plus a Switchyard trial); BOM, risks, ADR list and links updated. Also: the OpenRouter free tier is 50 requests a day **[verified: HTTP 429 response]**, so Evals-phase work needs paid credits or local models.
+6. **New section 4.4: weak models.** A wizard **model check** (probe) rates the user's model per template before they build, a **repair ladder** recovers some format failures at run time, and an **eval gate** decides whether a model and template pair may publish. Honest scope: repair converts some format failures into passes; it cannot make a weak model reason better or stop it inventing answers. S14 now measures the uplift instead of assuming it.
 
 ### v7
 1. **`pgvector_lite` is now the default retrieval engine; NeMo Retriever is optional.** The dev machine is a Mac with no NVIDIA GPU, and NeMo Retriever's local inference needs one (hosted endpoints are dev/test only, section 3.4). The zero-spend path must work out of the box. NeMo Retriever stays a selectable engine (`--profile gpu`, or hosted endpoint for prototyping). Wherever v6 text below says NeMo Retriever is the default, read it as optional.
@@ -69,7 +70,7 @@ Everything is early (0.x). **Rule: your own AgentSpec is the stable layer. NVIDI
 A guided builder where a non-technical person builds, tests and (later) deploys an agent.
 
 Wizard steps:
-1. **Connect LLM** (BYOK): any OpenAI-compatible endpoint (OpenAI, Anthropic via compatible gateway, NVIDIA hosted, local Ollama). Validate with a test call, store encrypted, never return it to the browser.
+1. **Connect LLM** (BYOK): any OpenAI-compatible endpoint (OpenAI, Anthropic via compatible gateway, NVIDIA hosted, local Ollama). Validate with a test call, store encrypted, never return it to the browser. Then a **model check** (section 4.4): about 10 short calls that test tool calling, output format and multi-step behaviour and rate the model for each template in plain language.
 2. **Choose agent type** (template gallery, 2.1).
 3. **Tool basket**: catalog filtered by agent type, recommended tools pre-ticked, plain-language description of what each can read or change, risk tier.
 4. **Connect systems and accounts** (section 7): OAuth for Gmail, Calendar and so on; the company's own database, spreadsheets, ticketing, CRM or ATS through connectors. The wizard introspects the source, proposes an entity mapping ("which table holds customers? which column is the email?"), the user confirms it, and typed lookup tools are generated. The user also picks how the agent is reached: web chat, email inbox, webhook, folder watch, schedule (section 7.9).
@@ -213,6 +214,48 @@ The platform must run with many kinds of models, so model differences are handle
 
 **Free-tier reality:** OpenRouter's free tier is 50 requests a day **[verified]**; 10 credits unlock 1000 free-model requests a day. Local Ollama models have no quota but are weak tool callers. Eval runs (Phase 5) need either credits or a local model with a stated quality floor.
 
+### 4.4 Weak models: wizard check, output repair, eval gate
+**Problem, from our own data (S2b).** On free models the same agent failed about half its runs: sometimes the reply mixed an action with a final answer, sometimes it was empty, once it answered a date from memory without calling the tool, and later runs hit the free-tier quota (HTTP 429). These are four different failures, and they need four different remedies. No layer removes all of them.
+
+#### 4.4.1 Wizard model check (probe)
+Right after BYOK, the wizard runs a short probe against the chosen model and tells the user what it found before they pick a template.
+- **Tests (about 10 calls):** a forced tool call with valid arguments; two tools in one task; a wrong-tool trap; JSON output that validates; a multi-step task of three or more steps; a "do not know" abstention question; a long-context needle; streaming works.
+- **Result:** a tier stored in the capability table (`packages/model-capabilities/`): **strong, standard, limited, unsuitable**, with a plain sentence per template, for example "Works well for personal automation. Not recommended for support: it sometimes invents order details."
+- **What the user can do:** pick a recommended model, continue anyway with a visible warning, or accept **limited mode** (below). The platform floor never turns off.
+- **Limited mode for weak models:** fewer tools in the basket, simpler templates only, Tier 1 and above actions require human approval, no unattended schedules or inbound channels, and the voice template is blocked.
+- **Cost warning:** the probe uses requests; on a free tier with a daily cap (OpenRouter free is 50 a day **[verified]**) the wizard says how many it will spend and caches the result per model and version. Re-probe when the model id changes.
+- **A probe is a sample, not proof.** About 10 calls cannot certify reliability; it screens out clearly unsuitable models, and the eval gate (4.4.3) does the real measuring.
+
+#### 4.4.2 Output repair ladder (runtime)
+Applied in order, cheapest first, with a hard cap on attempts per step. Every repair is written to the trace (Relay event) with its type, so repair rate is a visible metric and never hidden.
+
+| Step | What it does | Fixes | Cannot fix |
+|---|---|---|---|
+| 1. Deterministic repair | Strip text after the first valid action when a reply holds both an action and a final answer; unwrap code fences; normalise JSON quotes and tool-name case; coerce simple argument types | Mixed action and final answer (seen in S2b); cosmetic format slips | Wrong tool, wrong arguments |
+| 2. Retry with backoff | Re-send the same request; honour `Retry-After` on 429 | Empty replies that are transient; rate limits | A model that keeps returning nothing; an exhausted daily quota |
+| 3. Re-prompt with the exact error | Send the parser error back once ("Missing Action: ..., reply in this format") | Many format slips on capable models | Models that cannot hold the format |
+| 4. Constrain the output | Use native tool calling, `tool_choice`, or JSON-schema mode where the model supports it | Removes the parsing step altogether (section 4.3) | Models without these features |
+| 5. Escalate | Fall back to a stronger configured model (gateway fallback or Switchyard escalation router, 4.3) | Persistent failures, if the user configured a second model | Users with only one model |
+| 6. Fail loudly | Stop, show the user a plain message, keep the trace | Nothing; this is the safe exit | |
+
+**What repair must never do:** invent a tool call, fill in arguments the model did not give, or turn a refusal or a failure into a success. It reshapes text the model already produced. Anything that changes meaning goes to step 3 or later.
+
+**What repair cannot fix at all:** a model that answers from memory without calling the tool (S2b: a made-up date), wrong reasoning, and hallucinated facts. Those are caught by the eval gate and by grounding rules (section 8.7), for example "this question requires a tool call; a reply without one is a failure". They are not format problems.
+
+**Realistic expectation.** Repair should convert a useful share of format-only failures into passes and does nothing for the rest. We do not know the share yet; S14 measures raw versus repaired pass rate per model, and the numbers go into the capability table. Cost to count: every repair step adds latency and tokens, and on a free tier it also spends quota.
+
+#### 4.4.3 Eval gate (publish time and ongoing)
+- **Per model and template pair**, not per model: the personal-automation suite and the support suite differ. Suites live in `evals/`; the golden sets, negative cases and injection cases from section 8.8 are reused.
+- **Metrics:** task success after repair; **raw format-failure rate before repair**; tool-call validity; "answered without using a required tool" rate; correct abstention; latency p95; cost per task; repair rate by step.
+- **Thresholds** per template (starting point, tuned in S14): for example success at or above 0.85 and no-tool-answer rate under 0.05 for Tier 2 templates. Higher bars for templates that touch customer or hiring data.
+- **Outcomes:** pass (publish), **pass with limited mode** (publish with the restrictions in 4.4.1), or block with a plain explanation and a suggested model.
+- **Re-run when anything changes:** model id or version, template version, tool basket. Results are written back to the capability table.
+- **Runtime watch:** repair rate or abstention rate drifting up in production raises a warning in the owner's dashboard; a provider silently changing a model shows up here first.
+- **Honest limit:** the gate measures; it does not improve the model. It stops an unreliable pair from shipping and tells the user why. With small test suites the numbers are noisy, so report counts and confidence, not just a percentage.
+
+#### 4.4.4 AgentSpec and compiler hooks
+`model.reliability: { tier: standard, mode: normal|limited, repair: { max_attempts: 3, steps: [deterministic, retry, reprompt], escalate_to: null } }`. Compiler A sets the NAT agent type and retry settings from it (for example `parse_agent_response_max_retries`, which the Fabric target must expose; S2b showed the default of 1 is too low), compiler D adds the limited-mode approval rules to OPA, and the runner implements steps 1 to 3.
+
 ## 5. The AgentSpec (the one stable contract)
 ```yaml
 spec_version: 1
@@ -225,6 +268,7 @@ model:
   credential_ref: secret://llm/primary # never the key itself
   agent_mode: auto                     # auto | tool_calling | react; auto reads packages/model-capabilities
   capability_tier: standard            # filled from the capability table / evals; the wizard warns on weak tiers
+  reliability: { tier: standard, mode: normal, repair: { max_attempts: 3, escalate_to: null } }   # section 4.4
   routing: null                        # optional: { provider: switchyard, algorithm: escalation, models: [...] }
 instructions: { persona: "...", rules: ["..."] }
 tools: [ {id: gmail.read}, {id: gmail.send_draft}, {id: calendar.create_event} ]
@@ -534,7 +578,7 @@ Speech providers (pluggable):  open-source ASR/TTS (default, CPU-friendly)  |  N
 | S9 RAG baseline | Ingest about 50 real documents (including a few resumes) with **NeMo Retriever** (hosted endpoint if no GPU) and with the pgvector lite backend; compare retrieval quality, file-type coverage, Hindi/English, and CPU vs GPU/hosted latency; parse a resume into the `candidate_v1` schema | Hit rate, abstention behaviour, p95 latency, and the resume field accuracy before and after user confirmation |
 | S10 NAT retrievers and RAG evals | Read the NAT retrievers and "Adding a Retriever" docs; check whether NeMo Retriever has hybrid search, reranking and metadata filters, and whether NAT can use it as a retriever; test whether NAT eval or Evaluator can score RAG | Written decision: own MCP service around NeMo Retriever, NAT custom retriever, or both; chosen RAG eval tool |
 | S13 NeMo Retriever multi-tenancy | Create two tenants' collections in LanceDB; try cross-tenant queries, metadata filters, delete-and-verify-erased, re-embed into a new versioned index | Isolation holds under attack tests; erasure is real; decision on one-collection-per-tenant vs filters; default engine decision |
-| S14 Tool calling and gateway | (a) Run our `simple-agent` as a NAT `tool_calling_agent` and as `react_agent` on 3 to 4 models (a free one, a local Ollama one, a stronger paid one) and score pass rate over 10+ runs each, logging raw responses to tell empty output, 429 and wrong format apart. (b) Check whether the Fabric NAT adapter can take a tool-calling target or needs our own adapter target. (c) Put LiteLLM or OpenRouter behind the BYOK interface and run the same set. (d) Try Switchyard 0.3.0 as a local proxy with two models and, if feasible, its Relay plugin against our pinned Relay | A pass-rate table per model and agent mode; a decision on default agent mode, the capability table fields, whether Fabric needs a custom adapter, and whether Switchyard is worth enabling |
+| S14 Tool calling and gateway | (a) Run our `simple-agent` as a NAT `tool_calling_agent` and as `react_agent` on 3 to 4 models (a free one, a local Ollama one, a stronger paid one) and score pass rate over 10+ runs each, logging raw responses to tell empty output, 429 and wrong format apart. (b) Check whether the Fabric NAT adapter can take a tool-calling target or needs our own adapter target. (c) Put LiteLLM or OpenRouter behind the BYOK interface and run the same set. (d) Try Switchyard 0.3.0 as a local proxy with two models and, if feasible, its Relay plugin against our pinned Relay. (e) Build the probe (4.4.1) and repair steps 1 to 3 (4.4.2) and measure, per model, raw versus repaired pass rate, repair rate by step, and how well the probe's tier predicts the 10-run result | A pass-rate table per model and agent mode, with raw versus repaired columns; whether repair earns its cost; first thresholds for the eval gate; a decision on default agent mode, the capability table fields, whether Fabric needs a custom adapter, and whether Switchyard is worth enabling |
 
 | S11 Database connector | Point a read-only connector at a seeded Postgres and a SQLite file: introspect, map `customer` and `order` entities in a throwaway form, generate `customer.find` and `order.get` as MCP tools, call them from the S1 agent; then enable guarded NL-to-SQL and count how often a small local model writes a query the guard rejects or should have rejected | Agent answers "where is order 123" from the database with no hand-written tool code; privilege check refuses a read-write user; a list of guard rejections and misses |
 | S12 OpenAPI to tools | Feed a public OpenAPI spec (Petstore, then Zammad or OpenCATS) through FastMCP `from_openapi` or an alternative; wrap in manifests; tier by HTTP method; call through the gateway | Generated tools work end to end; choice of generator library with its licence recorded in the S7 table |
@@ -545,11 +589,11 @@ S9 to S14 may spill into week 3 without blocking Phase 1, because Phase 1 uses t
 
 | Phase | Weeks | Deliverable |
 |---|---|---|
-| 1. Vertical slice | 3 to 6 | Wizard (BYOK, personal-automation template, 5 to 8 tools), AgentSpec compilers A to C, run in OpenShell sandbox in test mode, trace view |
+| 1. Vertical slice | 3 to 6 | Wizard (BYOK, **model check**, personal-automation template, 5 to 8 tools), repair steps 1 to 3, AgentSpec compilers A to C, run in OpenShell sandbox in test mode, trace view |
 | 2. Safety | 7 to 9 | Guardrails profiles, OPA policies, risk tiers, approval UI, per-tool sandbox policy generation |
 | 3. Integrations v1 | 10 to 12 | Connector service with database (read-only) and CSV/Sheets connectors, schema introspection and entity mapping in the wizard, generated typed lookup tools with manifests, compiler F, synthetic demo datasets and snapshot test mode, record viewer, web-chat widget and webhook channels |
 | 4. Knowledge layer v1 | 13 to 16 | `RetrievalEngine` interface with NeMo Retriever and pgvector_lite backends, ingestion worker, `knowledge.search`, `faq.lookup`, `profile.get` over MCP, gateway-injected tenant scope, wizard "Add knowledge" step with fact confirmation, connector-to-collection sync, citations in the trace view |
-| 5. Evals | 17 to 19 | NAT eval suites, RAG golden sets and metrics, connector tests against snapshot data (including cross-tenant and allowlist-escape attempts), garak (including injection-in-document tests), publish gate |
+| 5. Evals | 17 to 19 | **Per model and template eval gate (4.4.3)**, NAT eval suites, RAG golden sets and metrics, connector tests against snapshot data (including cross-tenant and allowlist-escape attempts), garak (including injection-in-document tests), publish gate |
 | 6. More templates | 20 to 24 | Support first (database + helpdesk + RAG), then recruiting (ATS or folder, review queue) and job-applying, then research, ops, sales; OpenAPI and bring-your-own-MCP connectors, first app packs, email and schedule channels; bigger tool catalog |
 | 7. Caller agents | 25 to 31 | WebRTC voice, pluggable ASR/TTS, FAQ-first low-latency retrieval, voice guardrails and evals; PSTN only via user-supplied trunk |
 | 8. Distribution | later | Docs, one-command install, sample agents, optional hosted demo (costs money, so a separate decision) |
@@ -591,7 +635,7 @@ Write ADRs for: NAT-as-agent-layer, OpenShell tenancy model, Helix decision, tel
 6. **Helix overlap.** Mitigation: S5, then sharpen positioning on guided UX.
 7. **BYOK security and tenant isolation.** Mitigation: design secrets first, security review.
 8. **Voice cost and regulation.** Mitigation: optional, last, free WebRTC path first.
-9b. **Model output-format failures** (S2b: ReAct parse errors on free models, about half of runs). Mitigation: native tool calling by default, ReAct fallback, one format-repair retry, capability table, eval gate that blocks weak model and template pairs, S14.
+9b. **Model output-format failures** (S2b: ReAct parse errors on free models, about half of runs). Mitigation: native tool calling by default, ReAct fallback, the wizard model check and limited mode, the repair ladder (4.4.2), capability table, eval gate that blocks weak model and template pairs, S14. Residual risk: repair does not stop wrong answers or answers given without calling a tool; only the gate and grounding rules do.
 9c. **Switchyard maturity** (pre-1.0, demo server, experimental LiteLLM path, vendor-reported benchmarks). Mitigation: optional provider behind our interface, never on the MVP path, evaluate in S14.
 9d. **Free-tier quotas** (50 requests a day on OpenRouter free). Mitigation: credits or local models for evals; cache and batch test runs; tell users in the wizard.
 9a. **NeMo Retriever fit.** GPU-centric, LanceDB/Milvus rather than pgvector, unverified production licence terms, early versioning (26.x). Mitigation: `RetrievalEngine` interface, pgvector_lite fallback, S7/S13 before making it the default.
