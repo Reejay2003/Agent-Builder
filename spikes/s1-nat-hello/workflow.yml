@@ -1,0 +1,18 @@
+functions:
+  current_datetime:
+    _type: current_datetime
+
+llms:
+  main_llm:
+    _type: openai
+    model_name: nvidia/nemotron-3-super-120b-a12b:free
+    base_url: https://openrouter.ai/api/v1
+    api_key: ${OPENROUTER_API_KEY}
+    temperature: 0.0
+
+workflow:
+  _type: react_agent
+  tool_names: [current_datetime]
+  llm_name: main_llm
+  verbose: true
+  parse_agent_response_max_retries: 3
