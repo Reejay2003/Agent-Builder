@@ -16,6 +16,7 @@ import copy
 import logging
 import os
 from contextlib import AsyncExitStack
+from contextvars import ContextVar
 from typing import Any
 
 from nemo_fabric_adapters.common import instructions as common_instructions
@@ -673,6 +674,22 @@ def _session_kwargs(
     return result
 
 
+# --- NeMo Relay support (local patch, not in upstream NVIDIA reference adapter) ---------------------
+# NAT's agents run on LangGraph, so Relay's LangChain callback handler is attached through a global
+# LangChain configure-hook; it only takes effect while _RELAY_HANDLER is set inside an invocation.
+_RELAY_HANDLER: ContextVar[Any] = ContextVar("nemo_relay_langchain_handler", default=None)
+_RELAY_HOOK_REGISTERED = False
+
+
+def _ensure_relay_hook() -> None:
+    global _RELAY_HOOK_REGISTERED
+    if not _RELAY_HOOK_REGISTERED:
+        from langchain_core.tracers.context import register_configure_hook
+
+        register_configure_hook(_RELAY_HANDLER, inheritable=True)
+        _RELAY_HOOK_REGISTERED = True
+
+
 def _success_output(response: Any) -> AgentRunResult:
     return AgentRunResult(
         status=AgentRunStatus.SUCCEEDED,
@@ -719,6 +736,7 @@ class NatRuntime:
         self._runtime_id: str | None = None
         self._sessions: Any = None
         self._exit_stack: AsyncExitStack | None = None
+        self._relay_plugin_config: dict[str, Any] | None = None  # set when Fabric enables Relay
 
     def _invocation_failure(
         self,
@@ -747,6 +765,7 @@ class NatRuntime:
 
         runtime_id = _runtime_id(payload)
         agent_config = _agent_config(payload)
+        relay_config = self._resolve_relay(payload, agent_config)
         stack = AsyncExitStack()
         try:
             from nat.builder.workflow_builder import WorkflowBuilder
@@ -777,6 +796,95 @@ class NatRuntime:
         self._runtime_id = runtime_id
         self._sessions = sessions
         self._exit_stack = stack
+        self._relay_plugin_config = relay_config
+
+    def _resolve_relay(self, payload: dict[str, Any], agent_config: AgentConfig) -> dict[str, Any] | None:
+        """Return Relay's plugin config when Fabric enabled Relay for this runtime, else None."""
+
+        runtime_context = RuntimeContext.from_mapping(payload.get("runtime_context"))
+        telemetry = runtime_context.telemetry
+        if not (telemetry and telemetry.relay_enabled):
+            return None
+        import importlib.util
+
+        if importlib.util.find_spec("nemo_relay") is None:
+            raise lifecycle.LifecycleError(
+                "nat_relay_not_installed",
+                "Relay is enabled but 'nemo-relay' is not installed (pip install 'nemo-fabric[relay]')",
+            )
+        common_utils.reject_ambient_relay_plugin_config()
+        _ensure_relay_hook()
+        models = agent_config.models or {}
+        model_name = next(iter(models.values())).model if models else "unknown"
+        return common_utils.load_relay_plugin_config(
+            {
+                "agent_name": common_utils.agent_name(payload),
+                "base_dir": common_utils.base_dir(payload),
+                "config": {"models": {"default": {"model": model_name}}},
+                "runtime_context": runtime_context.to_mapping(),
+            }
+        )
+
+    async def _run_session(self, request: AgentRunRequest, session_kwargs: dict[str, Any]) -> Any:
+        from nat.data_models.runtime_enum import RuntimeTypeEnum
+
+        async with self._sessions.session(**session_kwargs) as session:
+            async with session.run(request.input, runtime_type=RuntimeTypeEnum.RUN_OR_SERVE) as runner:
+                return await runner.result()
+
+    async def _run_with_relay(
+        self, request: AgentRunRequest, runtime_context: RuntimeContext, session_kwargs: dict[str, Any]
+    ) -> tuple[Any, Exception | None, str | None]:
+        """Run the NAT session, inside a Relay Agent scope when Relay is enabled.
+
+        Returns (result, run_error, telemetry_error). The run error is returned, not raised, so the Relay scope
+        closes first and the ATIF trajectory is written even for failed runs. Telemetry faults never fail the run.
+        """
+
+        if self._relay_plugin_config is None:
+            try:
+                return await self._run_session(request, session_kwargs), None, None
+            except Exception as error:
+                return None, error, None
+        result: Any = None
+        run_error: Exception | None = None
+        telemetry_error: str | None = None
+        try:
+            from nemo_relay import ScopeType, plugin, scope
+            from nemo_relay.integrations.langchain import NemoRelayCallbackHandler
+
+            common_utils.reject_ambient_relay_plugin_config()
+            async with plugin.activate(self._relay_plugin_config) as activation:
+                common_utils.reject_inherited_relay_plugin_config(activation.report)
+                request_context, metadata = common_utils.relay_request_context(runtime_context.request_id)
+                metadata["nemo_fabric_invocation_id"] = runtime_context.invocation_id
+                with request_context:
+                    with scope.scope("nat-request", ScopeType.Agent, metadata=metadata):
+                        token = _RELAY_HANDLER.set(NemoRelayCallbackHandler())
+                        try:
+                            result = await self._run_session(request, session_kwargs)
+                        except Exception as error:
+                            run_error = error
+                        finally:
+                            _RELAY_HANDLER.reset(token)
+        except Exception as exc:  # telemetry setup/teardown fault
+            telemetry_error = f"{type(exc).__name__}: {exc}"
+        return result, run_error, telemetry_error
+
+    def _with_telemetry(self, result: AgentRunResult, telemetry_error: str | None) -> AgentRunResult:
+        """Attach the telemetry block and Relay artifact references to the result output."""
+
+        if self._relay_plugin_config is None:
+            return result
+        info: dict[str, Any] = {"enabled": True, "provider": "relay", "emitter": "nat.langchain/nemo_relay"}
+        try:
+            result.output["relay_artifacts"] = common_utils.collect_relay_artifacts(self._relay_plugin_config)
+        except Exception as exc:
+            telemetry_error = "; ".join(x for x in (telemetry_error, f"{type(exc).__name__}: {exc}") if x)
+        if telemetry_error:
+            info["error"] = telemetry_error
+        result.output["telemetry"] = info
+        return result
 
     async def invoke(
         self,
@@ -791,28 +899,23 @@ class NatRuntime:
         except ValueError as error:
             return _failure_output("nat_invalid_request", str(error))
 
-        try:
-            from nat.data_models.runtime_enum import RuntimeTypeEnum
-
-            async with self._sessions.session(**session_kwargs) as session:
-                async with session.run(
-                    request.input,
-                    runtime_type=RuntimeTypeEnum.RUN_OR_SERVE,
-                ) as runner:
-                    result = await runner.result()
-        except asyncio.CancelledError:
-            raise
-        except Exception as error:
+        result, run_error, telemetry_error = await self._run_with_relay(request, runtime_context, session_kwargs)
+        if run_error is not None:
+            error = run_error
             LOGGER.error(
                 "NeMo Agent Toolkit workflow invocation failed (error_type=%s)",
                 type(error).__name__,
             )
             if os.environ.get("FABRIC_NAT_DEBUG") == "1":  # local debugging patch, not in upstream
-                import traceback, sys as _sys
-                traceback.print_exception(error, file=open(os.environ.get('FABRIC_NAT_DEBUG_FILE','/tmp/fabric-nat-debug.log'),'a'))
-            return _failure_output(
-                "nat_workflow_invoke_failed",
-                "NeMo Agent Toolkit workflow invocation failed; inspect adapter stderr for details",
+                import traceback
+
+                traceback.print_exception(error, file=open(os.environ.get("FABRIC_NAT_DEBUG_FILE", "/tmp/fabric-nat-debug.log"), "a"))
+            return self._with_telemetry(
+                _failure_output(
+                    "nat_workflow_invoke_failed",
+                    "NeMo Agent Toolkit workflow invocation failed; inspect adapter stderr for details",
+                ),
+                telemetry_error,
             )
 
         try:
@@ -824,11 +927,14 @@ class NatRuntime:
                 "NeMo Agent Toolkit workflow returned a non-JSON result (error_type=%s)",
                 type(error).__name__,
             )
-            return _failure_output(
-                "nat_result_not_json_serializable",
-                "NeMo Agent Toolkit workflow returned a result that cannot be represented as JSON",
+            return self._with_telemetry(
+                _failure_output(
+                    "nat_result_not_json_serializable",
+                    "NeMo Agent Toolkit workflow returned a result that cannot be represented as JSON",
+                ),
+                telemetry_error,
             )
-        return _success_output(response)
+        return self._with_telemetry(_success_output(response), telemetry_error)
 
     async def invoke_openai_stream(
         self,
