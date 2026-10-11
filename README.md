@@ -44,4 +44,4 @@ Folders from the plan's layout (`apps/`, `services/`, `packages/`) are created w
 Run `make check` first. Common causes are in COMPLETED.md under Gotchas: Python 3.14, pre-release pins, Docker not on PATH, a full disk, free-tier rate limits.
 
 ## Licence
-Not chosen yet; add a `LICENSE` file before accepting outside contributions. (NVIDIA components used here are Apache-2.0.)
+Apache License 2.0, see [LICENSE](LICENSE). Files copied from NVIDIA projects keep their own Apache-2.0 notices (for example `spikes/s2-fabric-nat/LICENSE-NVIDIA-Fabric`).

@@ -57,6 +57,7 @@ Status values: `not started` / `in progress` / `blocked` / `done` / `partial`. T
 | 2026-10-10 | Pin `nemo-fabric==0.4.0` (no pre-releases) | Verified in the sandbox image; `--prerelease` pulls 0.5.0b3 | `requirements.txt` |
 | 2026-10-10 | Native tool calling is the default agent mode, ReAct the fallback; Switchyard is an optional router, not the gateway | S2b parse failures; Switchyard is pre-1.0 with a demo-only server | PLAN 4.3 |
 | 2026-10-10 | **Stay on a light/free LLM for now** (default `nvidia/nemotron-3-super-120b-a12b:free` via OpenRouter) | Cost; accept weaker agents and expect flaky runs until S14 | `.env.example` |
+| 2026-10-11 | Project licence is **Apache-2.0** (there is no "Apache 2.1"); `LICENSE` is the unmodified official text from apache.org | Matches the NVIDIA stack, includes a patent grant, friendly to contributors | `LICENSE` |
 | 2026-10-10 | Secrets only in git-ignored `.env`; the sandbox gets a placeholder key through an OpenShell provider | The key must never enter the agent's environment | `spikes/s3-openshell/` |
 
 ## Gotchas (do not rediscover these)
@@ -81,4 +82,5 @@ Status values: `not started` / `in progress` / `blocked` / `done` / `partial`. T
 - Relay licence and version compatibility with Switchyard's plugin (needs Relay 0.8 to under 1.0). (S4, S7)
 
 ## Changelog (newest first, one line each)
+- 2026-10-11: Added Apache-2.0 `LICENSE`; README and CONTRIBUTING updated.
 - 2026-10-10: Added contributor setup (requirements, lock file, Makefile, check script, dev container, README, CONTRIBUTING, this file).

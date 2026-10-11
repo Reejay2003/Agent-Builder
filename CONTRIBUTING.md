@@ -15,6 +15,9 @@
 - **Test from a clean copy** before saying setup works: clone to a new folder and run `make setup && make check`.
 - Do not change PLAN.md architecture silently; add an entry to its section 0 explaining the change and why.
 
+## Licence
+This project is Apache-2.0 ([LICENSE](LICENSE)). By submitting a contribution you agree it is licensed under Apache-2.0 (section 5 of the licence). Do not copy in code under an incompatible licence (GPL/AGPL, "non-commercial", or unclear terms); say where any third-party code came from and keep its notices.
+
 ## Secrets and safety
 - Use your **own** API keys. `.env` is git-ignored; never paste keys into issues, PRs, chat logs or files.
 - Before pushing: `git diff --cached | grep -i -E "sk-|api[_-]?key|secret|token"` should show nothing sensitive.
