@@ -3,7 +3,8 @@ SHELL := /bin/bash
 # NAT needs Python 3.11-3.13. Plain `python3` may be newer (3.14) and fail, so pick explicitly. Override: make setup PY=/path/to/python3.12
 PY ?= $(shell for p in python3.12 python3.13 python3.11; do command -v $$p && break; done)
 COMPOSE := docker compose -f deploy/compose/docker-compose.yml --env-file .env
-RUN_ENV := set -a; . ./.env; set +a; . .venv/bin/activate
+# LLM_API_KEY falls back to OPENROUTER_API_KEY so older .env files keep working
+RUN_ENV := set -a; . ./.env; set +a; export LLM_API_KEY="$${LLM_API_KEY:-$$OPENROUTER_API_KEY}"; . .venv/bin/activate
 
 .PHONY: help env setup setup-full check up down ps logs agent fabric-agent fabric-doctor sandbox-image dev-shell
 

@@ -1,0 +1,22 @@
+# NAT agent whose tools come from OUR MCP server (packages/mcp-tools/demo_server.py). Agent type: tool_calling.
+function_groups:
+  demo_tools:
+    _type: mcp_client
+    server:
+      transport: stdio
+      command: python
+      args: ["packages/mcp-tools/demo_server.py"]
+
+llms:
+  main_llm:
+    _type: openai
+    model_name: ${LLM_MODEL}
+    base_url: ${LLM_BASE_URL}
+    api_key: ${LLM_API_KEY}
+    temperature: 0.0
+
+workflow:
+  _type: tool_calling_agent
+  tool_names: [demo_tools]
+  llm_name: main_llm
+  verbose: true

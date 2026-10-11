@@ -24,7 +24,7 @@ def build_config() -> FabricConfig:
             provider=os.environ.get("LLM_PROVIDER", "openai"),
             model=os.environ.get("LLM_MODEL", "nvidia/nemotron-3-super-120b-a12b:free"),
             base_url=os.environ.get("LLM_BASE_URL", "https://openrouter.ai/api/v1"),
-            api_key_env="OPENROUTER_API_KEY",
+            api_key_env="LLM_API_KEY",
             temperature=0.0)},
         instructions=InstructionsConfig(system=InstructionConfig(
             content="Use the calculator tools for arithmetic. Return a concise answer.",

@@ -18,7 +18,7 @@ else miss "docker (install Docker Desktop and start it)"; fi
 [ -f .env ] && ok ".env exists" || miss ".env (run: make env)"
 if [ -f .env ]; then
   grep -q '^POSTGRES_PASSWORD=change-me' .env && warn "POSTGRES_PASSWORD is still the default"
-  grep -Eq '^OPENROUTER_API_KEY=.+' .env && ok "OPENROUTER_API_KEY set" || warn "OPENROUTER_API_KEY empty (LLM runs will fail)"
+  grep -Eq '^(LLM_API_KEY|OPENROUTER_API_KEY)=.+' .env && ok "LLM API key set" || warn "LLM_API_KEY empty (LLM runs will fail)"
 fi
 
 if [ -x .venv/bin/python ] && .venv/bin/python -c "import nat, nemo_fabric" 2>/dev/null; then

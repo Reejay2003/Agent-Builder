@@ -11,7 +11,7 @@ llms:
     _type: openai
     model_name: ${LLM_MODEL}
     base_url: ${LLM_BASE_URL}
-    api_key: ${OPENROUTER_API_KEY}
+    api_key: ${LLM_API_KEY}
     temperature: 0.0
 
 workflow:

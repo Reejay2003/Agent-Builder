@@ -1,0 +1,34 @@
+{
+  "server": "agent-builder-demo",
+  "source": "packages/mcp-tools/demo_server.py",
+  "transport": "stdio",
+  "tools": [
+    {
+      "id": "demo.get_current_time",
+      "mcp_name": "get_current_time",
+      "description_plain": "Tells the agent the current date and time in a chosen timezone. Reads the computer clock only.",
+      "scopes": [],
+      "side_effects": "none",
+      "risk_tier": 0,
+      "creds_required": [],
+      "egress_hosts": [],
+      "fs_paths": [],
+      "rate_limits": {"per_minute": 60},
+      "mock_response": "2026-01-01 12:00:00 UTC (Thursday)"
+    },
+    {
+      "id": "demo.add_numbers",
+      "mcp_name": "add_numbers",
+      "description_plain": "Adds two numbers. Pure calculation.",
+      "scopes": [], "side_effects": "none", "risk_tier": 0, "creds_required": [],
+      "egress_hosts": [], "fs_paths": [], "rate_limits": {"per_minute": 120}, "mock_response": 3.0
+    },
+    {
+      "id": "demo.count_words",
+      "mcp_name": "count_words",
+      "description_plain": "Counts the words in text the agent gives it. Pure calculation.",
+      "scopes": [], "side_effects": "none", "risk_tier": 0, "creds_required": [],
+      "egress_hosts": [], "fs_paths": [], "rate_limits": {"per_minute": 120}, "mock_response": 5
+    }
+  ]
+}
