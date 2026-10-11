@@ -30,12 +30,13 @@ Status values: `not started` / `in progress` / `blocked` / `done` / `partial`. T
 | (agent) | A simple NAT agent on the full SDK | **done** | 2026-10-10 | `agents/simple-agent/`, `make agent` | ReAct agent, tools `current_datetime` + `wiki_search`. Calculator is NOT a built-in tool |
 | S2 | Does Fabric run a NAT agent (`plan`, `doctor`, `run`)? | **done** | 2026-10-10 | `spikes/s2-fabric-nat/`, `run_calculator.py` | Yes. Fabric config is Python only (no YAML). NVIDIA's NAT adapter (tested on NAT 1.7/1.8) worked on 1.9.0 |
 | S2b | Does OUR agent run through Fabric? | **partial** | 2026-10-10 | `spikes/s2-fabric-nat/run_simple_agent.py` | Works (several correct runs) but about half the runs failed on free models: ReAct parse errors. Plain NAT fails the same way, so it is the model, not Fabric. A clean pass-rate was not measured (free quota ran out). `--plan`/`--doctor` verified on stable Fabric 0.4.0; the LLM runs used 0.5.0b3 |
+| S14 (partial) | Tool calling vs ReAct on our own MCP tools | **partial** | 2026-10-11 | `spikes/s14-tool-calling/README.md`, `packages/mcp-tools/`, `agents/mcp-agent/` | gpt-4.1-mini 15/15 in all modes (so Fabric is fine). On gpt-4.1-nano: tool calling 5/5, ReAct 3/5 (NAT) and 3/5 (Fabric). Failures = model drops the MCP tool-name prefix, loops or gives up, not format parsing. Not done: Fabric tool-calling target, probe, repair, gateway, Switchyard |
 | S3 | Can the agent run in an OpenShell sandbox with controlled egress? | **done** | 2026-10-10 | `spikes/s3-openshell/` (both parts) | Yes. Allowed host works, other hosts blocked, key hidden inside (placeholder). About 0.6 s start, about 24 MiB per idle sandbox. Calculator agent ran inside on Fabric 0.4.0 + NAT 1.9.0 |
 
 ## Next up (suggested order; claim before starting)
 | ID | Task | Needs | Owner | Status |
 |---|---|---|---|---|
-| S14 | Tool-calling vs ReAct across 3 to 4 models; gateway; Switchyard trial; probe + repair steps ([PLAN 4.3, 4.4, S14](PLAN.md)) | LLM quota (free tier is 50 requests/day; a few dollars of credit or local Ollama recommended) | (unclaimed) | not started |
+| S14 (rest) | Remaining: larger N and more tasks; Fabric tool-calling target (custom adapter?); wizard probe + repair step 1 (tool-name suffix mapping) and 3; LiteLLM gateway; Switchyard trial ([PLAN 4.3, 4.4, S14](PLAN.md)) | An LLM key (OpenAI key works; free tier is 50 requests/day) | (unclaimed) | partial |
 | S4 | Relay emits ATIF trajectories; NAT eval and NeMo Evaluator score one; decide telemetry source of truth | S2 | (unclaimed) | not started |
 | S7 | Licence table in `docs/` | reading only | (unclaimed) | partial: NAT, Fabric, OpenShell, NeMo Retriever, Switchyard are Apache-2.0 [verified]; Relay, NIM/Riva terms, embedding model licences not read |
 | S5 | Helix check (build on, borrow from, or ignore) | reading only | (unclaimed) | not started |
@@ -58,6 +59,8 @@ Status values: `not started` / `in progress` / `blocked` / `done` / `partial`. T
 | 2026-10-10 | Native tool calling is the default agent mode, ReAct the fallback; Switchyard is an optional router, not the gateway | S2b parse failures; Switchyard is pre-1.0 with a demo-only server | PLAN 4.3 |
 | 2026-10-10 | **Stay on a light/free LLM for now** (default `nvidia/nemotron-3-super-120b-a12b:free` via OpenRouter) | Cost; accept weaker agents and expect flaky runs until S14 | `.env.example` |
 | 2026-10-11 | Project licence is **Apache-2.0** (there is no "Apache 2.1"); `LICENSE` is the unmodified official text from apache.org | Matches the NVIDIA stack, includes a patent grant, friendly to contributors | `LICENSE` |
+| 2026-10-11 | Development default model is **gpt-4.1-mini** via OpenAI (paid, cents per test run); free OpenRouter model is the zero-cost fallback. Supersedes "stay on a free LLM" for day-to-day work | Measured: gpt-4.1-mini is 15/15 across NAT and Fabric; free and nano models are flaky with ReAct | `.env.example`, S14 |
+| 2026-10-11 | **Native tool calling is the default agent mode** (confirmed by S14 data); ReAct is the fallback | gpt-4.1-nano: tool calling 5/5 vs ReAct 3/5 | PLAN 4.3 |
 | 2026-10-10 | Secrets only in git-ignored `.env`; the sandbox gets a placeholder key through an OpenShell provider | The key must never enter the agent's environment | `spikes/s3-openshell/` |
 
 ## Gotchas (do not rediscover these)
@@ -73,6 +76,11 @@ Status values: `not started` / `in progress` / `blocked` / `done` / `partial`. T
 - **OpenShell installer** is a `curl | sh` that installs a Homebrew service. Read the script first (`install.sh` in the OpenShell repo) and run it yourself.
 - **Disk full breaks Docker silently:** Docker's VM goes read-only and builds can produce 0-byte files. Keep several GB free; after freeing space rebuild with `--no-cache`.
 - **`docker` not found in a terminal** on macOS: add `/Applications/Docker.app/Contents/Resources/bin` to PATH, or turn on Docker Desktop's CLI tools.
+- **MCP tool names are prefixed** by NAT (`demo__add_numbers`). Weak models in ReAct mode drop the prefix, NAT rejects the call, and the agent loops to LangGraph's recursion limit (32) or gives up. Tool calling avoids it.
+- **Subprocesses need the venv on PATH:** the MCP stdio server (`command: python`) and the Fabric adapter host both resolve `python` from PATH. If PATH lacks `.venv/bin` you get "Connection closed" or `No module named nemo_fabric_adapters.common`. `make` targets and the S14 harness set it; sandbox images bake it in.
+- **`.env` keys must be one unbroken line, no spaces.** A key pasted with wrapped spaces makes the shell run fragments as commands and the key arrives empty (HTTP 401). A mis-copied key also gives 401; re-copy with the provider's copy button.
+- **System Python 3.13 here has no CA certificates** (`CERTIFICATE_VERIFY_FAILED` with urllib); use `.venv/bin/python` for HTTPS calls.
+- **Do not judge an agent run by its final text:** one "success" contained a made-up date. S14's harness checks the real time and the MCP server's own call log.
 - **`--no-keep` OpenShell sandboxes** can keep their name for a few seconds ("already exists"); use a new name.
 
 ## Open questions / blockers
@@ -82,5 +90,6 @@ Status values: `not started` / `in progress` / `blocked` / `done` / `partial`. T
 - Relay licence and version compatibility with Switchyard's plugin (needs Relay 0.8 to under 1.0). (S4, S7)
 
 ## Changelog (newest first, one line each)
+- 2026-10-11: S14 partial: demo MCP server + manifest, MCP agent configs, test harness; first results (gpt-4.1-mini, gpt-4.1-nano). Default dev model now gpt-4.1-mini.
 - 2026-10-11: Added Apache-2.0 `LICENSE`; README and CONTRIBUTING updated.
 - 2026-10-10: Added contributor setup (requirements, lock file, Makefile, check script, dev container, README, CONTRIBUTING, this file).

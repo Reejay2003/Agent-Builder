@@ -60,7 +60,9 @@ def classify(text, answer, called):
         if "both a final answer and a parse-able action" in text: return "parse_mixed_action_and_final"
         if "LLM output: ''" in text or 'LLM output: ""' in text: return "parse_empty_output"
         return "parse_other"
+    if "GRAPH_RECURSION_LIMIT" in text or "Recursion limit" in text: return "loop_recursion_limit"
     if answer is None: return "no_answer_other_error"
+    if re.search(r"mistake in the tool name|tool name", answer, re.I) and not called: return "gave_up_after_tool_name_error"
     has_math = "42.5" in answer
     both_tools = {"add_numbers", "get_current_time"} <= called
     if has_math and time_is_plausible(answer) and both_tools: return "success"
@@ -108,9 +110,12 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--n", type=int, default=3)
     ap.add_argument("--modes", default="nat-react,nat-toolcalling,fabric-react")
+    ap.add_argument("--model", help="override LLM_MODEL from .env for this run")
     ap.add_argument("--openrouter-free", action="store_true", help="use OPENROUTER_API_KEY + a free model (no cost; 50 requests/day)")
     a = ap.parse_args()
     env = load_env()
+    if a.model:
+        env["LLM_MODEL"] = a.model
     if a.openrouter_free:
         env.update(LLM_API_KEY=env.get("OPENROUTER_API_KEY", ""), LLM_BASE_URL="https://openrouter.ai/api/v1",
                    LLM_MODEL="nvidia/nemotron-3-super-120b-a12b:free")
@@ -125,7 +130,7 @@ if __name__ == "__main__":
         for i in range(1, a.n + 1):
             r = run_one(mode, env, i); rows.append(r)
             print(f"  {mode:16s} #{i}  {r['outcome']:30s} {r['seconds']}s  {r['answer'][:70]!r}", flush=True)
-    (OUT / f"{stamp}.jsonl").write_text("\n".join(json.dumps(r) for r in rows))
+    (OUT / f"{stamp}-{env.get('LLM_MODEL','model').replace('/', '_')}.jsonl").write_text("\n".join(json.dumps(r) for r in rows))
     print("\nSummary (outcome counts per mode):")
     for mode in a.modes.split(","):
         c = Counter(r["outcome"] for r in rows if r["mode"] == mode)
