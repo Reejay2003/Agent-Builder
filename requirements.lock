@@ -6,6 +6,7 @@ aiohappyeyeballs==2.7.1
     # via aiohttp
 aiohttp==3.14.4
     # via
+    #   fsspec
     #   langchain-community
     #   langchain-nvidia-ai-endpoints
     #   langchain-oci
@@ -44,6 +45,7 @@ boto3==1.43.111
     # via
     #   langchain-aws
     #   litellm
+    #   nvidia-nat-eval
 botocore==1.43.111
     # via
     #   boto3
@@ -85,10 +87,18 @@ cryptography==48.0.1
     #   pyopenssl
 dataclasses-json==0.6.7
     # via langchain-community
+datasets==4.8.5
+    # via nvidia-nat-eval
+dill==0.4.1
+    # via
+    #   datasets
+    #   multiprocess
 distro==1.9.0
     # via
     #   langsmith
     #   openai
+et-xmlfile==2.0.0
+    # via openpyxl
 exa-py==1.16.2
     # via langchain-exa
 expandvars==1.1.2
@@ -99,14 +109,17 @@ fastuuid==0.14.0
     # via litellm
 filelock==3.32.7
     # via
+    #   datasets
     #   huggingface-hub
     #   litellm
 frozenlist==1.8.0
     # via
     #   aiohttp
     #   aiosignal
-fsspec==2026.9.0
-    # via huggingface-hub
+fsspec==2026.2.0
+    # via
+    #   datasets
+    #   huggingface-hub
 googleapis-common-protos==1.75.5
     # via
     #   opentelemetry-exporter-otlp-proto-grpc
@@ -136,6 +149,7 @@ httptools==0.9.0
     # via uvicorn
 httpx==0.28.1
     # via
+    #   datasets
     #   exa-py
     #   huggingface-hub
     #   langchain-core
@@ -157,6 +171,7 @@ httpx2-jsfetch==1.0 ; sys_platform == 'emscripten'
     # via httpx2
 huggingface-hub==1.33.0
     # via
+    #   datasets
     #   langchain-huggingface
     #   litellm
     #   tokenizers
@@ -286,6 +301,8 @@ multidict==6.9.1
     # via
     #   aiohttp
     #   yarl
+multiprocess==0.70.19
+    # via datasets
 mypy-extensions==1.1.0
     # via typing-inspect
 nemo-fabric==0.4.0
@@ -304,6 +321,7 @@ networkx==3.7
     # via nvidia-nat-core
 numpy==2.5.3
     # via
+    #   datasets
     #   langchain-aws
     #   langchain-community
     #   langchain-oci
@@ -316,11 +334,14 @@ nvidia-nat-atif==1.9.0
 nvidia-nat-core==1.9.0
     # via
     #   -r requirements.txt
+    #   nvidia-nat-eval
     #   nvidia-nat-langchain
     #   nvidia-nat-mcp
     #   nvidia-nat-opentelemetry
 nvidia-nat-eval==1.9.0
-    # via nvidia-nat-langchain
+    # via
+    #   -r requirements.txt
+    #   nvidia-nat-langchain
 nvidia-nat-langchain==1.9.0
     # via -r requirements.txt
 nvidia-nat-mcp==1.9.0
@@ -344,6 +365,8 @@ openevals==0.2.0
     # via nvidia-nat-langchain
 openinference-semantic-conventions==0.1.41
     # via nvidia-nat-opentelemetry
+openpyxl==3.1.5
+    # via nvidia-nat-eval
 opentelemetry-api==1.45.1
     # via
     #   fastapi
@@ -392,6 +415,7 @@ ormsgpack==1.12.2
 packaging==26.3
     # via
     #   -r requirements.txt
+    #   datasets
     #   huggingface-hub
     #   langchain-core
     #   langsmith
@@ -399,6 +423,7 @@ packaging==26.3
     #   marshmallow
 pandas==2.3.3
     # via
+    #   datasets
     #   nvidia-nat-core
     #   pymilvus
 pip==26.2.1
@@ -418,6 +443,8 @@ protobuf==7.36.2
     #   googleapis-common-protos
     #   opentelemetry-proto
     #   pymilvus
+pyarrow==26.0.0
+    # via datasets
 pycparser==3.11 ; implementation_name != 'PyPy' and platform_python_implementation != 'PyPy'
     # via cffi
 pydantic==2.14.0
@@ -488,6 +515,7 @@ pywin32==312 ; sys_platform == 'win32'
     # via mcp
 pyyaml==6.0.3
     # via
+    #   datasets
     #   huggingface-hub
     #   langchain-classic
     #   langchain-community
@@ -503,6 +531,7 @@ regex==2026.9.29
     # via tiktoken
 requests==2.34.2
     # via
+    #   datasets
     #   exa-py
     #   langchain-classic
     #   langchain-community
@@ -564,7 +593,9 @@ tokenizers==0.23.3
     #   litellm
 tqdm==4.70.1
     # via
+    #   datasets
     #   huggingface-hub
+    #   nvidia-nat-eval
     #   openai
 truststore==0.10.4 ; sys_platform != 'emscripten'
     # via
@@ -642,6 +673,7 @@ wikipedia==1.4.0
     # via nvidia-nat-langchain
 xxhash==4.0.1
     # via
+    #   datasets
     #   langgraph
     #   langsmith
 yarl==1.25.1

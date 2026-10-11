@@ -1,0 +1,54 @@
+# NAT eval over our MCP tools. Agent type: tool_calling. Run: make eval KIND=tool_calling   (or see spikes/s4-relay-eval/README.md)
+function_groups:
+  demo_tools:
+    _type: mcp_client
+    server:
+      transport: stdio
+      command: python
+      args: ["packages/mcp-tools/demo_server.py"]
+
+llms:
+  main_llm:
+    _type: openai
+    model_name: ${LLM_MODEL}
+    base_url: ${LLM_BASE_URL}
+    api_key: ${LLM_API_KEY}
+    temperature: 0.0
+  judge_llm:
+    _type: openai
+    model_name: ${JUDGE_MODEL}
+    base_url: ${LLM_BASE_URL}
+    api_key: ${LLM_API_KEY}
+    temperature: 0.0
+    max_tokens: 1024
+
+workflow:
+  _type: tool_calling_agent
+  tool_names: [demo_tools]
+  llm_name: main_llm
+  verbose: true
+
+
+eval:
+  general:
+    max_concurrency: 1
+    output:
+      dir: ./spikes/s4-relay-eval/out/tool_calling
+      write_atif_workflow_output: true
+    dataset:
+      _type: json
+      file_path: spikes/s4-relay-eval/dataset.json
+  evaluators:
+    avg_workflow_runtime:
+      _type: avg_workflow_runtime
+      max_concurrency: 1
+    avg_num_llm_calls:
+      _type: avg_num_llm_calls
+      max_concurrency: 1
+    avg_tokens_per_llm_end:
+      _type: avg_tokens_per_llm_end
+      max_concurrency: 1
+    trajectory:
+      _type: trajectory
+      llm_name: judge_llm
+      max_concurrency: 1

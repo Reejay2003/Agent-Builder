@@ -13,6 +13,8 @@ Run: `make` is not wired; use `.venv/bin/python spikes/s14-tool-calling/run_matr
 | gpt-4.1-mini (OpenAI) | **5/5** | **5/5** | **5/5** |
 | gpt-4.1-nano (OpenAI) | 3/5 | **5/5** | 3/5 |
 
+> **Correction (2026-10-11, see `spikes/s4-relay-eval/README.md`):** a larger NAT-eval run on the same nano model did NOT reproduce the 3/5 vs 5/5 gap (ReAct 14/15, tool calling 15/15 numerically correct, with the LLM judge penalising different behaviours). Read points 2 to 4 below as hypotheses, not findings.
+
 ## What this tells us
 1. **Not a Fabric problem.** With a decent model Fabric + NAT is 5/5, identical to plain NAT. Fabric and plain NAT fail at the same rate on the weak model.
 2. **It is a model-strength x agent-type problem.** ReAct degrades with the weak model; native tool calling did not (5/5 on both).

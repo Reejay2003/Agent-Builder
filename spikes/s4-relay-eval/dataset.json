@@ -1,0 +1,7 @@
+[
+  {"id": "q1", "question": "What is 17.5 plus 25? Use the tools.", "answer": "42.5"},
+  {"id": "q2", "question": "How many words are in this text: 'the quick brown fox jumps'? Use the tools.", "answer": "5"},
+  {"id": "q3", "question": "What is 123.4 plus 876.6? Use the tools.", "answer": "1000"},
+  {"id": "q4", "question": "Count the words in: 'agents need reliable tools'. Use the tools.", "answer": "4"},
+  {"id": "q5", "question": "What is 2.5 plus 2.5, and how many words are in 'one two three'? Use the tools.", "answer": "5 and 3"}
+]

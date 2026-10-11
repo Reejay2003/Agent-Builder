@@ -30,6 +30,7 @@ Status values: `not started` / `in progress` / `blocked` / `done` / `partial`. T
 | (agent) | A simple NAT agent on the full SDK | **done** | 2026-10-10 | `agents/simple-agent/`, `make agent` | ReAct agent, tools `current_datetime` + `wiki_search`. Calculator is NOT a built-in tool |
 | S2 | Does Fabric run a NAT agent (`plan`, `doctor`, `run`)? | **done** | 2026-10-10 | `spikes/s2-fabric-nat/`, `run_calculator.py` | Yes. Fabric config is Python only (no YAML). NVIDIA's NAT adapter (tested on NAT 1.7/1.8) worked on 1.9.0 |
 | S2b | Does OUR agent run through Fabric? | **partial** | 2026-10-10 | `spikes/s2-fabric-nat/run_simple_agent.py` | Works (several correct runs) but about half the runs failed on free models: ReAct parse errors. Plain NAT fails the same way, so it is the model, not Fabric. A clean pass-rate was not measured (free quota ran out). `--plan`/`--doctor` verified on stable Fabric 0.4.0; the LLM runs used 0.5.0b3 |
+| S4 (partial) | Logs and scoring | **partial** | 2026-10-11 | `spikes/s4-relay-eval/README.md`, `make eval` | NAT-native ATIF v1.7 + `nat eval` (trajectory judge) work. Relay is accepted by Fabric but the NAT adapter ignores it (no files, `telemetry: []`). Larger run (nano, 15 runs/type): ReAct 14/15, tool calling 15/15 numerically; judge scores 0.83 / 0.85; reveals coincidental and wasteful runs. **Did not reproduce S14's 3/5 vs 5/5 gap** |
 | S14 (partial) | Tool calling vs ReAct on our own MCP tools | **partial** | 2026-10-11 | `spikes/s14-tool-calling/README.md`, `packages/mcp-tools/`, `agents/mcp-agent/` | gpt-4.1-mini 15/15 in all modes (so Fabric is fine). On gpt-4.1-nano: tool calling 5/5, ReAct 3/5 (NAT) and 3/5 (Fabric). Failures = model drops the MCP tool-name prefix, loops or gives up, not format parsing. Not done: Fabric tool-calling target, probe, repair, gateway, Switchyard |
 | S3 | Can the agent run in an OpenShell sandbox with controlled egress? | **done** | 2026-10-10 | `spikes/s3-openshell/` (both parts) | Yes. Allowed host works, other hosts blocked, key hidden inside (placeholder). About 0.6 s start, about 24 MiB per idle sandbox. Calculator agent ran inside on Fabric 0.4.0 + NAT 1.9.0 |
 
@@ -37,7 +38,7 @@ Status values: `not started` / `in progress` / `blocked` / `done` / `partial`. T
 | ID | Task | Needs | Owner | Status |
 |---|---|---|---|---|
 | S14 (rest) | Remaining: larger N and more tasks; Fabric tool-calling target (custom adapter?); wizard probe + repair step 1 (tool-name suffix mapping) and 3; LiteLLM gateway; Switchyard trial ([PLAN 4.3, 4.4, S14](PLAN.md)) | An LLM key (OpenAI key works; free tier is 50 requests/day) | (unclaimed) | partial |
-| S4 | Relay emits ATIF trajectories; NAT eval and NeMo Evaluator score one; decide telemetry source of truth | S2 | (unclaimed) | not started |
+| S4 (rest) | Relay through the NAT adapter (patch our adapter copy to activate the Relay plugin + LangChain handler, or decide to skip it); try NeMo Evaluator; decide telemetry source of truth (leaning NAT-native ATIF for now) | S2 | (unclaimed) | partial |
 | S7 | Licence table in `docs/` | reading only | (unclaimed) | partial: NAT, Fabric, OpenShell, NeMo Retriever, Switchyard are Apache-2.0 [verified]; Relay, NIM/Riva terms, embedding model licences not read |
 | S5 | Helix check (build on, borrow from, or ignore) | reading only | (unclaimed) | not started |
 | S6 | Whole stack on a laptop with Ollama, no cloud spend | Ollama | (unclaimed) | not started |
@@ -76,6 +77,9 @@ Status values: `not started` / `in progress` / `blocked` / `done` / `partial`. T
 - **OpenShell installer** is a `curl | sh` that installs a Homebrew service. Read the script first (`install.sh` in the OpenShell repo) and run it yourself.
 - **Disk full breaks Docker silently:** Docker's VM goes read-only and builds can produce 0-byte files. Keep several GB free; after freeing space rebuild with `--no-cache`.
 - **`docker` not found in a terminal** on macOS: add `/Applications/Docker.app/Contents/Resources/bin` to PATH, or turn on Docker Desktop's CLI tools.
+- **`uv pip install "nemo-fabric[relay]"` can break the `nemo_fabric_adapters` namespace package** (the Fabric adapter host then fails with `No module named nemo_fabric_adapters.common`). Fix: `uv pip install --reinstall nemo-fabric-adapters-common==0.4.0`.
+- **Fabric accepting a `relay=` config does not mean the adapter uses it.** Check that files appear / `RunResult.telemetry` is non-empty; `doctor` will not tell you.
+- **Answer-matching hides bad trajectories:** use the trajectory judge (`make eval`). Also check the scorer first: ours once counted `42.5.` != `42.5` and `1000.0` != `1000` as failures.
 - **MCP tool names are prefixed** by NAT (`demo__add_numbers`). Weak models in ReAct mode drop the prefix, NAT rejects the call, and the agent loops to LangGraph's recursion limit (32) or gives up. Tool calling avoids it.
 - **Subprocesses need the venv on PATH:** the MCP stdio server (`command: python`) and the Fabric adapter host both resolve `python` from PATH. If PATH lacks `.venv/bin` you get "Connection closed" or `No module named nemo_fabric_adapters.common`. `make` targets and the S14 harness set it; sandbox images bake it in.
 - **`.env` keys must be one unbroken line, no spaces.** A key pasted with wrapped spaces makes the shell run fragments as commands and the key arrives empty (HTTP 401). A mis-copied key also gives 401; re-copy with the provider's copy button.
@@ -90,6 +94,7 @@ Status values: `not started` / `in progress` / `blocked` / `done` / `partial`. T
 - Relay licence and version compatibility with Switchyard's plugin (needs Relay 0.8 to under 1.0). (S4, S7)
 
 ## Changelog (newest first, one line each)
+- 2026-10-11: S4 partial: NAT eval + ATIF working (`make eval`), Relay silent through NAT adapter, S14 gap not reproduced; `nvidia-nat-eval[full]` added to requirements.
 - 2026-10-11: S14 partial: demo MCP server + manifest, MCP agent configs, test harness; first results (gpt-4.1-mini, gpt-4.1-nano). Default dev model now gpt-4.1-mini.
 - 2026-10-11: Added Apache-2.0 `LICENSE`; README and CONTRIBUTING updated.
 - 2026-10-10: Added contributor setup (requirements, lock file, Makefile, check script, dev container, README, CONTRIBUTING, this file).
