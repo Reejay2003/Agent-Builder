@@ -27,7 +27,9 @@ def build_config() -> FabricConfig:
         runtime=RuntimeConfig(input_schema="text", output_schema="message"),
     )
     cfg.add_mcp_server("demo", transport="stdio", url=sys.executable,
-                       args=[str(ROOT / "packages/mcp-tools/demo_server.py")], exposure="harness_native")
+                       args=[str(ROOT / "packages/mcp-tools/demo_server.py")]
+                       + (["--log", os.environ["AB_TOOL_LOG_PATH"]] if os.environ.get("AB_TOOL_LOG_PATH") else []),
+                       exposure="harness_native")
     return cfg
 
 

@@ -10,7 +10,11 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from mcp.server.fastmcp import FastMCP
 
 mcp = FastMCP("agent-builder-demo")
+import sys
+
 CALL_LOG = os.environ.get("AB_TOOL_LOG", "/tmp/ab-demo-tool-calls.jsonl")  # audit log used by tests as proof a tool really ran
+if "--log" in sys.argv:  # per-run log path (lets tests run in parallel)
+    CALL_LOG = sys.argv[sys.argv.index("--log") + 1]
 
 
 def _log(tool: str, **args) -> None:

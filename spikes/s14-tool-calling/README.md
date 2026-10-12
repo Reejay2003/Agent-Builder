@@ -32,6 +32,18 @@ The upstream NAT reference adapter only accepts the `fabric.agent.react` descrip
 
 Across all S14/S4 runs on this task, tool calling made no outright failures (it did make extra, unrequested tool calls in the S4 eval); ReAct failed in 1 to 2 of 5 on nano in the matrix runs but 1 of 15 in the S4 eval. Still small N. Direction is consistent, not proven.
 
+## Big suite (2026-10-12): `run_suite.py`, 480 runs
+3 OpenAI models x 4 setups (NAT/Fabric x ReAct/tool calling) x 20 varied tasks (math, text, time zones, multi-tool, chained, no-tool-needed, traps) x 2 reps = N=40 per cell. Scoring uses the MCP server's per-run call log as proof of tool use. Tasks: `tasks.py`.
+
+| Model | NAT ReAct | NAT tool calling | Fabric ReAct | Fabric tool calling |
+|---|---|---|---|---|
+| gpt-4.1-mini | 100% | 100% | 100% | 100% |
+| gpt-4o-mini | 95% | 95% | 95% | 100% |
+| gpt-4.1-nano | 92.5% | 97.5% | 85% | 97.5% |
+
+(success %; "clean", i.e. no unrequested tool calls, is 82-100%, lowest for nano.) nano ReAct failures: parse errors, recursion-limit loops, wrong answers; nano tool-calling failures: calling a tool when none was needed. Hardest tasks: the fictional-timezone trap (f1, mostly ReAct) and no-tool questions (e2). Fabric matched plain NAT (no Fabric penalty). Tool calling was never worse; the only large gap is nano Fabric-ReAct (85%).
+**Read with care:** 40 runs per cell, so 97.5% vs 92.5% is one or two runs. Only the weakest model separates the agent types. The f1 checker may be strict (unverified). Raw rows: `results/suite-big1.jsonl` (git-ignored).
+
 ## Caveats (do not over-read)
 - N=5 per cell, one task, one MCP server, temperature 0. 3/5 vs 5/5 is suggestive, not statistically solid. Needs larger N and more tasks.
 - Only OpenAI models (the project key sees 11 models). `gpt-5*` are reasoning models and may reject a `temperature` setting [unverified]; not tested.
