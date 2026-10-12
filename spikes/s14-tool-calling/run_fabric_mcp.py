@@ -9,12 +9,18 @@ from nemo_fabric import (DiscoveryConfig, Fabric, FabricConfig, MetadataConfig, 
                          RuntimeConfig, WorkflowConfig)
 
 
+def _workflow() -> dict:
+    """FABRIC_AGENT_KIND=react (default) or tool_calling selects which NAT agent type the adapter builds."""
+    if os.environ.get("FABRIC_AGENT_KIND", "react") == "tool_calling":
+        return dict(target_id="agent-builder.simple-agent-toolcalling", settings={"llm_name": "default"})
+    return dict(target_id="agent-builder.simple-agent", settings={"llm_name": "default", "parse_agent_response_max_retries": 3})
+
+
 def build_config() -> FabricConfig:
     cfg = FabricConfig(
         metadata=MetadataConfig(name="s14-mcp-agent"),
         discovery=DiscoveryConfig(local_paths=[S2]),
-        workflow=WorkflowConfig(target_id="agent-builder.simple-agent",
-                                settings={"llm_name": "default", "parse_agent_response_max_retries": 3}),
+        workflow=WorkflowConfig(**_workflow()),
         models={"default": ModelConfig(provider="openai", model=os.environ["LLM_MODEL"],
                                        base_url=os.environ["LLM_BASE_URL"], api_key_env="LLM_API_KEY",
                                        temperature=0.0)},

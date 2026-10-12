@@ -1,5 +1,5 @@
 """S14 harness: run the same task N times per agent mode and classify every outcome.
-Modes: nat-react | nat-toolcalling (plain NAT YAML) | fabric-react (through Fabric + NAT adapter).
+Modes: nat-react | nat-toolcalling (plain NAT YAML) | fabric-react | fabric-toolcalling (through Fabric + our patched NAT adapter).
 Usage: python spikes/s14-tool-calling/run_matrix.py --n 5 --modes nat-react,nat-toolcalling,fabric-react
 Reads .env itself (robust to odd values), never prints the key. Costs real LLM calls: about 2-4 per run.
 """
@@ -82,6 +82,7 @@ def run_one(mode, env, i):
         cfg = "workflow-react.yml" if mode == "nat-react" else "workflow-tool_calling.yml"
         cmd = [str(ROOT / ".venv/bin/nat"), "run", "--config_file", f"agents/mcp-agent/{cfg}", "--input", TASK]
     else:
+        env["FABRIC_AGENT_KIND"] = "tool_calling" if mode == "fabric-toolcalling" else "react"
         cmd = [py, "spikes/s14-tool-calling/run_fabric_mcp.py", TASK]
     t0 = time.time()
     p = subprocess.run(cmd, cwd=ROOT, env=env, capture_output=True, text=True, timeout=240)

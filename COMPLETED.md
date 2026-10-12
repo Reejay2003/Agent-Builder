@@ -61,6 +61,7 @@ Status values: `not started` / `in progress` / `blocked` / `done` / `partial`. T
 | 2026-10-10 | **Stay on a light/free LLM for now** (default `nvidia/nemotron-3-super-120b-a12b:free` via OpenRouter) | Cost; accept weaker agents and expect flaky runs until S14 | `.env.example` |
 | 2026-10-11 | Project licence is **Apache-2.0** (there is no "Apache 2.1"); `LICENSE` is the unmodified official text from apache.org | Matches the NVIDIA stack, includes a patent grant, friendly to contributors | `LICENSE` |
 | 2026-10-11 | Development default model is **gpt-4.1-mini** via OpenAI (paid, cents per test run); free OpenRouter model is the zero-cost fallback. Supersedes "stay on a free LLM" for day-to-day work | Measured: gpt-4.1-mini is 15/15 across NAT and Fabric; free and nano models are flaky with ReAct | `.env.example`, S14 |
+| 2026-10-12 | **We own our NAT adapter** (patched copy of NVIDIA's Apache-2.0 reference, currently in `spikes/s2-fabric-nat/src/`): supports ReAct and tool calling, Relay activation; repair steps and typed telemetry go here. Move to `services/runner/` when Phase 1 starts | Upstream has no maintained NAT adapter and the reference is ReAct-only | `spikes/s2-fabric-nat/`, PLAN 4.1 |
 | 2026-10-11 | **Native tool calling is the default agent mode** (confirmed by S14 data); ReAct is the fallback | gpt-4.1-nano: tool calling 5/5 vs ReAct 3/5 | PLAN 4.3 |
 | 2026-10-10 | Secrets only in git-ignored `.env`; the sandbox gets a placeholder key through an OpenShell provider | The key must never enter the agent's environment | `spikes/s3-openshell/` |
 
@@ -78,6 +79,7 @@ Status values: `not started` / `in progress` / `blocked` / `done` / `partial`. T
 - **Disk full breaks Docker silently:** Docker's VM goes read-only and builds can produce 0-byte files. Keep several GB free; after freeing space rebuild with `--no-cache`.
 - **`docker` not found in a terminal** on macOS: add `/Applications/Docker.app/Contents/Resources/bin` to PATH, or turn on Docker Desktop's CLI tools.
 - **`uv pip install "nemo-fabric[relay]"` can break the `nemo_fabric_adapters` namespace package** (the Fabric adapter host then fails with `No module named nemo_fabric_adapters.common`). Fix: `uv pip install --reinstall nemo-fabric-adapters-common==0.4.0`.
+- **Fabric has NO bundled NAT adapter.** `external/nat` in the Fabric repo is a source-only third-party reference (no PyPI package). It accepts only `fabric.agent.react`; ReAct is its hardwired agent type, not a Fabric or NAT requirement. Our copy also accepts `fabric.agent.tool_calling`.
 - **To get Relay output through Fabric you need all four:** the adapter descriptor declares `telemetry.providers.relay`; `cfg.telemetry = TelemetryConfig(providers={"relay": ...})`; `cfg.relay = RelayConfig(...)`; and `cfg.runtime.artifacts = <dir>` (else no `FABRIC_RELAY_CONFIG_PATH`). The adapter must also activate Relay (our patched copy does). A running Relay instance is not a factor (checked).
 - **Fabric accepting a `relay=` config does not mean the adapter uses it.** Check that files appear / `RunResult.telemetry` is non-empty; `doctor` will not tell you.
 - **Answer-matching hides bad trajectories:** use the trajectory judge (`make eval`). Also check the scorer first: ours once counted `42.5.` != `42.5` and `1000.0` != `1000` as failures.
@@ -95,6 +97,7 @@ Status values: `not started` / `in progress` / `blocked` / `done` / `partial`. T
 - Relay licence and version compatibility with Switchyard's plugin (needs Relay 0.8 to under 1.0). (S4, S7)
 
 ## Changelog (newest first, one line each)
+- 2026-10-12: Our NAT adapter copy now supports `fabric.agent.tool_calling`; nano through Fabric: tool calling 5/5 vs ReAct 4/5.
 - 2026-10-11: Relay now emits ATOF + ATIF through Fabric via a patched NAT adapter copy; running-instance hypothesis ruled out; Relay events are graph-level only.
 - 2026-10-11: S4 partial: NAT eval + ATIF working (`make eval`), Relay silent through NAT adapter, S14 gap not reproduced; `nvidia-nat-eval[full]` added to requirements.
 - 2026-10-11: S14 partial: demo MCP server + manifest, MCP agent configs, test harness; first results (gpt-4.1-mini, gpt-4.1-nano). Default dev model now gpt-4.1-mini.

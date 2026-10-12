@@ -35,6 +35,9 @@ HARNESS = "nat"
 MODE = "agent_config"
 WORKFLOW_FACTORY_KIND = "factory"
 FABRIC_REACT_AGENT = "fabric.agent.react"
+FABRIC_TOOL_CALLING_AGENT = "fabric.agent.tool_calling"  # local patch: not in the upstream reference adapter
+# Fabric agent intent -> NAT workflow type
+FABRIC_AGENT_TYPES = {FABRIC_REACT_AGENT: "react_agent", FABRIC_TOOL_CALLING_AGENT: "tool_calling_agent"}
 FUNCTION_GROUP_SEPARATOR = "__"
 REACT_AGENT_REFS = frozenset(
     {
@@ -109,7 +112,7 @@ def _nat_workflow(agent_config: AgentConfig) -> dict[str, Any]:
             f"workflow.entrypoint.kind must equal {WORKFLOW_FACTORY_KIND!r}",
             field="workflow.entrypoint.kind",
         )
-    if entrypoint.ref != FABRIC_REACT_AGENT:
+    if entrypoint.ref not in FABRIC_AGENT_TYPES:
         raise _config_error(
             "nat_invalid_workflow",
             f"NeMo Agent Toolkit does not support workflow factory {entrypoint.ref!r}",
@@ -125,9 +128,8 @@ def _nat_workflow(agent_config: AgentConfig) -> dict[str, Any]:
         )
 
     workflow = copy.deepcopy(settings)
-    workflow["_type"] = "react_agent"
-    if _is_react_agent(workflow):
-        workflow.setdefault("tool_names", [])
+    workflow["_type"] = FABRIC_AGENT_TYPES[entrypoint.ref]
+    workflow.setdefault("tool_names", [])  # both agent types take tool_names
     return workflow
 
 
