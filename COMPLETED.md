@@ -5,7 +5,7 @@
 ## How to use this file (keeps us out of loops)
 1. Before starting: find your task in **Next up**, put your GitHub handle in `Owner`, and set `Status` to `in progress` (do this in a small PR or an issue comment first).
 2. While working: if you hit something that cost you more than 15 minutes, add it to **Gotchas**.
-3. When done: in the **same PR** as the work, move the item to **Done** with the date, the evidence (a file, a command, or a result), and one line on what was learned. A spike that passed but is not recorded here did not happen.
+3. When done: in the **same PR** as the work, record it under **Done** (and, once a phase is finished, in that phase's **Phase N completed** section at the end of this file) with the date, the evidence (a file, a command, or a result), and one line on what was learned. A spike that passed but is not recorded here did not happen.
 4. If you change a decision, add a new row to **Decisions** (do not edit the old one). Say why.
 5. Never write secrets here or anywhere in the repo.
 
@@ -112,6 +112,7 @@ Cleanup already done: adapter moved to `services/runner/nat_adapter/` (own READM
 - Relay licence and version compatibility with Switchyard's plugin (needs Relay 0.8 to under 1.0). (S4, S7)
 
 ## Changelog (newest first, one line each)
+- 2026-10-12: Added per-phase completion sections at the end (Phase 0 completed, Phase 1 to 8 placeholders).
 - 2026-10-12: Phase 1 cleanup: adapter moved to `services/runner/nat_adapter/`, README/paths updated, Phase 1 kickoff list added.
 - 2026-10-12: Typed Relay events (LLM + tool steps with tokens) for both agent types; tool-name repair built (0 triggers in A/B); `make test` added.
 - 2026-10-12: S14 big suite (480 runs): tool calling >= ReAct everywhere, clearest gap on gpt-4.1-nano; Fabric matches plain NAT.
@@ -121,3 +122,84 @@ Cleanup already done: adapter moved to `services/runner/nat_adapter/` (own READM
 - 2026-10-11: S14 partial: demo MCP server + manifest, MCP agent configs, test harness; first results (gpt-4.1-mini, gpt-4.1-nano). Default dev model now gpt-4.1-mini.
 - 2026-10-11: Added Apache-2.0 `LICENSE`; README and CONTRIBUTING updated.
 - 2026-10-10: Added contributor setup (requirements, lock file, Makefile, check script, dev container, README, CONTRIBUTING, this file).
+
+
+---
+
+# Phase completion record
+One section per phase of the [PLAN roadmap](PLAN.md#13-roadmap-after-phase-0). When a task finishes, add a row to its phase's table with the date and evidence. A phase is "completed" when its deliverable (first line of each section) works end to end and is recorded here; carry-overs are listed, not hidden.
+
+## Phase 0 completed (closed 2026-10-12, with carry-overs)
+**Goal:** answer the risky questions before building. **Result:** the stack works end to end and the key design decisions have evidence. Carry-overs do not block Phase 1.
+
+| Spike | What it settled | Status | Evidence |
+|---|---|---|---|
+| S1 NAT hello world | NAT runs with our own key and an MCP tool, no NVIDIA key | **done** | `spikes/s1-nat-hello/` |
+| S2 / S2b NAT via Fabric | Fabric runs NAT agents (`plan`, `doctor`, `run`); Fabric has no NAT adapter of its own, so we own one | **done** | `spikes/s2-fabric-nat/`, `services/runner/nat_adapter/` |
+| S3 OpenShell | Per-run sandbox with an egress allow-list and a hidden key; about 0.6 s start, about 24 MiB idle | **done** | `spikes/s3-openshell/` |
+| S4 Relay and evals | NAT-native ATIF and `nat eval` work; Relay works through our adapter with typed LLM/tool events (model, tokens, tool args and results) | **done, with carry-overs** | `spikes/s4-relay-eval/`, `nat_adapter/relay_events.py` |
+| S14 tool calling vs ReAct | 480-run suite: tool calling never worse, clearly better only on the weakest model; Fabric matches plain NAT | **done, with carry-overs** | `spikes/s14-tool-calling/` |
+| Docker / dev environment | Compose stack, pinned requirements, `make` targets, clean-install verified | **done** | `deploy/`, `requirements.lock`, `make check` |
+
+**Carry-overs (tracked in Next up; none blocks Phase 1):**
+- **Reading only:** S5 (Helix check) and the rest of S7 (Relay and NIM/Riva/embedding licences).
+- **Phase 0 leftovers:** S6 (full run on Ollama, no spend); S4 rest (NeMo Evaluator, Relay ATIF in the eval harness, OTel export); S14 rest (gateway, Switchyard trial, model probe, larger N); tool-name repair benefit unproven.
+- **Needed before Phase 3 and 4, not before Phase 1:** S9 to S13 (RAG baseline, NAT retrievers and RAG evals, database connector, OpenAPI to tools, NeMo Retriever multi-tenancy). S8 (speech) is optional.
+
+**Phase 0 decisions worth remembering:** tool calling is the default agent mode, ReAct the fallback; we own the NAT adapter; `pgvector_lite` is the default retrieval engine; Switchyard is optional; free-tier LLMs are not reliable enough for evals (dev default `gpt-4.1-mini`). Full list under **Decisions**.
+
+## Phase 1 completed: Vertical slice (weeks 3 to 6)
+**Deliverable:** wizard (BYOK, model check, personal-automation template, 5 to 8 tools), AgentSpec, compilers A to C, run in an OpenShell sandbox in test mode, trace view. Task list: **Phase 1 kickoff** above (P1.1 to P1.7).
+
+| Task | Date | Evidence | Notes |
+|---|---|---|---|
+| _nothing completed yet_ | | | |
+
+## Phase 2 completed: Safety (weeks 7 to 9)
+**Deliverable:** guardrail profiles, OPA policies, risk tiers, approval UI, per-tool sandbox policy generation.
+
+| Task | Date | Evidence | Notes |
+|---|---|---|---|
+| _nothing completed yet_ | | | |
+
+## Phase 3 completed: Integrations v1 (weeks 10 to 12)
+**Deliverable:** connector service (database read-only, CSV/Sheets), schema introspection and entity mapping, generated lookup tools, compiler F, demo datasets and snapshot test mode, record viewer, web-chat and webhook channels. Needs S11, S12 first.
+
+| Task | Date | Evidence | Notes |
+|---|---|---|---|
+| _nothing completed yet_ | | | |
+
+## Phase 4 completed: Knowledge layer v1 (weeks 13 to 16)
+**Deliverable:** `RetrievalEngine` (pgvector_lite default, NeMo Retriever optional), ingestion worker, `knowledge.search` / `faq.lookup` / `profile.get` over MCP, gateway-injected tenant scope, "Add knowledge" wizard step. Needs S9, S10, S13 first.
+
+| Task | Date | Evidence | Notes |
+|---|---|---|---|
+| _nothing completed yet_ | | | |
+
+## Phase 5 completed: Evals (weeks 17 to 19)
+**Deliverable:** per model-and-template eval gate, NAT eval suites, RAG golden sets and metrics, connector tests, garak red-teaming, publish gate.
+
+| Task | Date | Evidence | Notes |
+|---|---|---|---|
+| _nothing completed yet_ | | | |
+
+## Phase 6 completed: More templates (weeks 20 to 24)
+**Deliverable:** support, recruiting, job-applying, research, ops, sales templates; OpenAPI and bring-your-own-MCP connectors; app packs; email and schedule channels.
+
+| Task | Date | Evidence | Notes |
+|---|---|---|---|
+| _nothing completed yet_ | | | |
+
+## Phase 7 completed: Caller agents (weeks 25 to 31)
+**Deliverable:** WebRTC voice, pluggable ASR/TTS, FAQ-first low-latency retrieval, voice guardrails and evals.
+
+| Task | Date | Evidence | Notes |
+|---|---|---|---|
+| _nothing completed yet_ | | | |
+
+## Phase 8 completed: Distribution (later)
+**Deliverable:** docs, one-command install, sample agents, optional hosted demo (a separate cost decision).
+
+| Task | Date | Evidence | Notes |
+|---|---|---|---|
+| _nothing completed yet_ | | | |
