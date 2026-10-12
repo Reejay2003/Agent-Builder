@@ -44,13 +44,13 @@ agent:  ## run the simple NAT agent: make agent Q="your question"
 	$(RUN_ENV); nat run --config_file agents/simple-agent/workflow.yml --input "$${Q:-Who created Python, and what is the date today?}"
 
 test:  ## offline tests for our adapter additions (no LLM, no cost)
-	$(RUN_ENV); python spikes/s2-fabric-nat/test_adapter_patches.py
+	$(RUN_ENV); python services/runner/nat_adapter/test_adapter_patches.py
 
 eval:  ## NAT eval with ATIF output: make eval KIND=react|tool_calling REPS=3 MODEL=gpt-4.1-mini (costs LLM calls)
 	$(RUN_ENV); export JUDGE_MODEL=$${JUDGE_MODEL:-$${LLM_MODEL}}; $${MODEL:+export LLM_MODEL=$$MODEL;} nat eval --config_file spikes/s4-relay-eval/eval-$${KIND:-tool_calling}.yml --reps=$${REPS:-1}; python spikes/s4-relay-eval/summarize.py spikes/s4-relay-eval/out/$${KIND:-tool_calling}
 
 fabric-agent:  ## run the same agent through Fabric (ARGS=--plan or --doctor skips the LLM call)
-	$(RUN_ENV); export PYTHONPATH="$$PWD/spikes/s2-fabric-nat/src"; python spikes/s2-fabric-nat/run_simple_agent.py $(ARGS)
+	$(RUN_ENV); export PYTHONPATH="$$PWD/services/runner/nat_adapter/src"; python spikes/s2-fabric-nat/run_simple_agent.py $(ARGS)
 
 fabric-doctor:  ## Fabric pre-flight check (no LLM call)
 	$(MAKE) fabric-agent ARGS=--doctor

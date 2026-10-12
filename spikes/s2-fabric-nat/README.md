@@ -9,7 +9,7 @@ Setup (repo-root .venv): `uv pip install --prerelease=allow nemo-fabric nemo-fab
 Run:
 ```
 set -a; . .env; set +a
-export PYTHONPATH="$PWD/spikes/s2-fabric-nat/src"
+export PYTHONPATH="$PWD/services/runner/nat_adapter/src"   # the adapter moved here (2026-10-12)
 python spikes/s2-fabric-nat/run_calculator.py [--plan | --doctor]
 ```
 Result: `RunResult.status = succeeded`, response "42.0" (calculator MCP tool, model via OpenRouter free tier).

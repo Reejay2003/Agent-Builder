@@ -36,6 +36,19 @@ Status values: `not started` / `in progress` / `blocked` / `done` / `partial`. T
 | S14 (partial) | Tool calling vs ReAct on our own MCP tools | **partial** | 2026-10-11 | `spikes/s14-tool-calling/README.md`, `packages/mcp-tools/`, `agents/mcp-agent/` | gpt-4.1-mini 15/15 in all modes (so Fabric is fine). On gpt-4.1-nano: tool calling 5/5, ReAct 3/5 (NAT) and 3/5 (Fabric). Failures = model drops the MCP tool-name prefix, loops or gives up, not format parsing. Not done: Fabric tool-calling target, probe, repair, gateway, Switchyard |
 | S3 | Can the agent run in an OpenShell sandbox with controlled egress? | **done** | 2026-10-10 | `spikes/s3-openshell/` (both parts) | Yes. Allowed host works, other hosts blocked, key hidden inside (placeholder). About 0.6 s start, about 24 MiB per idle sandbox. Calculator agent ran inside on Fabric 0.4.0 + NAT 1.9.0 |
 
+## Phase 1 kickoff (cleanup done 2026-10-12; claim before starting)
+Phase 0 has enough evidence to start Phase 1 ([PLAN section 13](PLAN.md)). Suggested order, each small and independent:
+| # | Task | Output | Owner | Status |
+|---|---|---|---|---|
+| P1.1 | **AgentSpec** JSON Schema + typed models | `packages/agent-spec/` (spec_version 1, validated examples: personal_automation, support) | (unclaimed) | not started |
+| P1.2 | **Compiler A/B**: AgentSpec -> NAT workflow + `FabricConfig` (agent mode from `model.agent_mode`, tools from manifests, Relay on) | `services/runner/compiler/`, golden-file tests, `make test` | (unclaimed) | not started |
+| P1.3 | **Runner service**: run a compiled spec through Fabric, return result + ATIF | `services/runner/` FastAPI endpoint `POST /runs` | (unclaimed) | not started |
+| P1.4 | **Tool store v0**: manifests for demo + Gmail/Calendar tools, MCP gateway stub | `packages/tool-manifests/`, `services/mcp-gateway/` | (unclaimed) | not started |
+| P1.5 | **Model check (probe)** + capability table | `packages/model-capabilities/`, `services/control` endpoint ([PLAN 4.4.1](PLAN.md)) | (unclaimed) | not started |
+| P1.6 | **Control service** skeleton: FastAPI + Postgres (AgentSpec versions, runs) | `services/control/` | (unclaimed) | not started |
+| P1.7 | **Wizard** shell (Next.js): BYOK, template, tool basket, test run with trace view | `apps/web/` | (unclaimed) | not started |
+Cleanup already done: adapter moved to `services/runner/nat_adapter/` (own README, tests, licence file); `make test`; eval deps pinned; harnesses updated; all runs re-verified after the move.
+
 ## Next up (suggested order; claim before starting)
 | ID | Task | Needs | Owner | Status |
 |---|---|---|---|---|
@@ -63,7 +76,7 @@ Status values: `not started` / `in progress` / `blocked` / `done` / `partial`. T
 | 2026-10-10 | **Stay on a light/free LLM for now** (default `nvidia/nemotron-3-super-120b-a12b:free` via OpenRouter) | Cost; accept weaker agents and expect flaky runs until S14 | `.env.example` |
 | 2026-10-11 | Project licence is **Apache-2.0** (there is no "Apache 2.1"); `LICENSE` is the unmodified official text from apache.org | Matches the NVIDIA stack, includes a patent grant, friendly to contributors | `LICENSE` |
 | 2026-10-11 | Development default model is **gpt-4.1-mini** via OpenAI (paid, cents per test run); free OpenRouter model is the zero-cost fallback. Supersedes "stay on a free LLM" for day-to-day work | Measured: gpt-4.1-mini is 15/15 across NAT and Fabric; free and nano models are flaky with ReAct | `.env.example`, S14 |
-| 2026-10-12 | **We own our NAT adapter** (patched copy of NVIDIA's Apache-2.0 reference, currently in `spikes/s2-fabric-nat/src/`): supports ReAct and tool calling, Relay activation; repair steps and typed telemetry go here. Move to `services/runner/` when Phase 1 starts | Upstream has no maintained NAT adapter and the reference is ReAct-only | `spikes/s2-fabric-nat/`, PLAN 4.1 |
+| 2026-10-12 | **We own our NAT adapter** (patched copy of NVIDIA's Apache-2.0 reference, now in `services/runner/nat_adapter/`): supports ReAct and tool calling, Relay activation with typed LLM/tool events, tool-name repair; later repair steps go here | Upstream has no maintained NAT adapter and the reference is ReAct-only | `spikes/s2-fabric-nat/`, PLAN 4.1 |
 | 2026-10-11 | **Native tool calling is the default agent mode** (confirmed by S14 data); ReAct is the fallback | gpt-4.1-nano: tool calling 5/5 vs ReAct 3/5 | PLAN 4.3 |
 | 2026-10-10 | Secrets only in git-ignored `.env`; the sandbox gets a placeholder key through an OpenShell provider | The key must never enter the agent's environment | `spikes/s3-openshell/` |
 
@@ -73,7 +86,7 @@ Status values: `not started` / `in progress` / `blocked` / `done` / `partial`. T
 - **`nvidia-nat` alone is not enough:** you need `nvidia-nat-langchain[all]` (LLM providers) and `nvidia-nat-mcp`.
 - **Calculator tool does not exist in NAT's library;** it is only in the repo's examples. `wiki_search` and `current_datetime` do.
 - **Fabric config is Python objects, not YAML.** Tools need `add_tool_definition(...)` AND `config.tools.enabled = [...]`, or the agent has zero tools.
-- **The Fabric NAT adapter runs in a subprocess,** so it needs `PYTHONPATH=spikes/s2-fabric-nat/src` (the Makefile sets it). It hides error details; set `FABRIC_NAT_DEBUG=1` to write tracebacks to `/tmp/fabric-nat-debug.log` (our local patch).
+- **The Fabric NAT adapter runs in a subprocess,** so it needs `PYTHONPATH=services/runner/nat_adapter/src` (the Makefile sets it). It hides error details; set `FABRIC_NAT_DEBUG=1` to write tracebacks to `/tmp/fabric-nat-debug.log` (our local patch).
 - **Free-model flakiness:** ReAct parse errors (action and final answer in one reply, or empty output). OpenRouter free tier is 50 requests a day and returns HTTP 429 after that; repeated test runs burn it fast. Do not conclude "Fabric is broken" from a failing run; run plain `make agent` first.
 - **OpenShell on macOS:** Docker Desktop must have *Settings > Resources > Network > Enable host networking* on, or sandboxes cannot reach the gateway. Docker 28+ required.
 - **OpenShell policy:** `run_as_user` must exist in the image (use numeric `"1000"`); the app directory must be owned by that uid (`COPY --chown`); allow rules name specific binaries (`/usr/bin/python3.12`); the default image has no `curl` or Python.
@@ -99,6 +112,7 @@ Status values: `not started` / `in progress` / `blocked` / `done` / `partial`. T
 - Relay licence and version compatibility with Switchyard's plugin (needs Relay 0.8 to under 1.0). (S4, S7)
 
 ## Changelog (newest first, one line each)
+- 2026-10-12: Phase 1 cleanup: adapter moved to `services/runner/nat_adapter/`, README/paths updated, Phase 1 kickoff list added.
 - 2026-10-12: Typed Relay events (LLM + tool steps with tokens) for both agent types; tool-name repair built (0 triggers in A/B); `make test` added.
 - 2026-10-12: S14 big suite (480 runs): tool calling >= ReAct everywhere, clearest gap on gpt-4.1-nano; Fabric matches plain NAT.
 - 2026-10-12: Our NAT adapter copy now supports `fabric.agent.tool_calling`; nano through Fabric: tool calling 5/5 vs ReAct 4/5.

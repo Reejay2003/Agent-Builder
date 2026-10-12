@@ -75,7 +75,7 @@ def classify(text, answer, called):
 def run_one(mode, env, i):
     # The MCP stdio server (`command: python`) and the Fabric adapter host both resolve `python` from PATH, so the venv must lead it.
     env = dict(env, PATH=f"{ROOT / '.venv/bin'}:{env.get('PATH', '')}", VIRTUAL_ENV=str(ROOT / ".venv"),
-               PYTHONPATH=str(ROOT / "spikes/s2-fabric-nat/src"), FABRIC_NAT_DEBUG="1",
+               PYTHONPATH=str(ROOT / "services/runner/nat_adapter/src"), FABRIC_NAT_DEBUG="1",
                FABRIC_NAT_DEBUG_FILE=f"/tmp/s14-debug-{mode}-{i}.log")
     py = str(ROOT / ".venv/bin/python")
     if mode.startswith("nat-"):

@@ -3,7 +3,7 @@ import asyncio, json, os, sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-S2 = ROOT / "spikes" / "s2-fabric-nat"
+S2 = ROOT / "services" / "runner" / "nat_adapter"  # our NAT adapter
 sys.path.insert(0, str(S2 / "src"))
 from nemo_fabric import (DiscoveryConfig, Fabric, FabricConfig, MetadataConfig, ModelConfig,
                          RuntimeConfig, WorkflowConfig)

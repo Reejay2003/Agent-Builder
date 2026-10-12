@@ -7,7 +7,9 @@ import argparse, asyncio, json, os, sys
 from pathlib import Path
 
 HERE = Path(__file__).parent
-sys.path.insert(0, str(HERE / "src"))  # source-only NAT adapter
+ROOT = HERE.parents[1]
+ADAPTER = ROOT / "services" / "runner" / "nat_adapter"  # our NAT adapter (moved out of spikes/)
+sys.path.insert(0, str(ADAPTER / "src"))  # source-only NAT adapter
 
 from nemo_fabric import (DiscoveryConfig, Fabric, FabricConfig, InstructionConfig,
                          InstructionsConfig, MetadataConfig, ModelConfig, RuntimeConfig,
@@ -17,7 +19,7 @@ from nemo_fabric import (DiscoveryConfig, Fabric, FabricConfig, InstructionConfi
 def build_config() -> FabricConfig:
     config = FabricConfig(
         metadata=MetadataConfig(name="s2-nat-calculator"),
-        discovery=DiscoveryConfig(local_paths=[HERE]),
+        discovery=DiscoveryConfig(local_paths=[ADAPTER]),
         workflow=WorkflowConfig(target_id="nvidia.examples.nat.calculator",
                                 settings={"llm_name": "default"}),
         models={"default": ModelConfig(
@@ -43,7 +45,7 @@ async def main():
     p.add_argument("--doctor", action="store_true")
     p.add_argument("--input", default="What is 21 multiplied by 2?")
     a = p.parse_args()
-    base = HERE / ".tmp"; base.mkdir(exist_ok=True)
+    base = ADAPTER / ".tmp"; base.mkdir(exist_ok=True)
     fabric, cfg = Fabric(), build_config()
     if a.doctor:
         out = await fabric.doctor(cfg, base_dir=base)

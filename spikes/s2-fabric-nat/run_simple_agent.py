@@ -10,7 +10,9 @@ import argparse, asyncio, json, os, sys
 from pathlib import Path
 
 HERE = Path(__file__).parent
-sys.path.insert(0, str(HERE / "src"))
+ROOT = HERE.parents[1]
+ADAPTER = ROOT / "services" / "runner" / "nat_adapter"  # our NAT adapter (moved out of spikes/)
+sys.path.insert(0, str(ADAPTER / "src"))
 
 from nemo_fabric import (DiscoveryConfig, Fabric, FabricConfig, MetadataConfig, ModelConfig,
                          RuntimeConfig, WorkflowConfig)
@@ -19,7 +21,7 @@ from nemo_fabric import (DiscoveryConfig, Fabric, FabricConfig, MetadataConfig, 
 def build_config() -> FabricConfig:
     config = FabricConfig(
         metadata=MetadataConfig(name="simple-agent"),
-        discovery=DiscoveryConfig(local_paths=[HERE]),
+        discovery=DiscoveryConfig(local_paths=[ADAPTER]),
         workflow=WorkflowConfig(target_id="agent-builder.simple-agent",
                                 settings={"llm_name": "default", "parse_agent_response_max_retries": 3}),
         models={"default": ModelConfig(
@@ -44,7 +46,7 @@ async def main():
     p.add_argument("--doctor", action="store_true")
     p.add_argument("--input", default="Who created Python, and what is the date today?")
     a = p.parse_args()
-    base = HERE / ".tmp"; base.mkdir(exist_ok=True)
+    base = ADAPTER / ".tmp"; base.mkdir(exist_ok=True)
     fabric, cfg = Fabric(), build_config()
     if a.doctor:
         out = await fabric.doctor(cfg, base_dir=base)

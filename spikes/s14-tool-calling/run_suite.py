@@ -42,7 +42,7 @@ def run_job(job, base_env):
     tmp = Path(tempfile.mkdtemp(prefix="abs-"))
     log = tmp / "tools.jsonl"
     env = dict(base_env, LLM_MODEL=model, PATH=f"{ROOT / '.venv/bin'}:{base_env.get('PATH', '')}", VIRTUAL_ENV=str(ROOT / ".venv"),
-               PYTHONPATH=str(ROOT / "spikes/s2-fabric-nat/src"), FABRIC_NAT_DEBUG="1", FABRIC_NAT_DEBUG_FILE=str(tmp / "debug.log"),
+               PYTHONPATH=str(ROOT / "services/runner/nat_adapter/src"), FABRIC_NAT_DEBUG="1", FABRIC_NAT_DEBUG_FILE=str(tmp / "debug.log"),
                AB_TOOL_LOG_PATH=str(log), FABRIC_NAT_REPAIR=base_env.get("FABRIC_NAT_REPAIR", ""))
     if mode.startswith("nat-"):
         tpl = (ROOT / "agents/mcp-agent" / ("workflow-react.yml" if mode == "nat-react" else "workflow-tool_calling.yml")).read_text()

@@ -26,6 +26,8 @@ make fabric-agent # same agent through NeMo Fabric
 | [PLAN.md](PLAN.md) | The master plan (architecture, wizard, phases, spikes, risks) |
 | [COMPLETED.md](COMPLETED.md) | Progress, decisions, gotchas, next tasks. Update it with every PR |
 | `agents/simple-agent/` | A minimal NAT agent (YAML) |
+| `services/runner/nat_adapter/` | Our NAT adapter for Fabric (ReAct + tool calling, Relay, repair); run `make test` |
+| `packages/mcp-tools/`, `packages/tool-manifests/` | Demo MCP server and its tool manifest (the start of the tool store) |
 | `spikes/` | Phase 0 experiments, one folder each, with a README holding the result |
 | `deploy/compose/` | Docker Compose stack (Postgres+pgvector, Valkey, optional dev container) |
 | `deploy/docker/` | Dockerfiles (dev container) |
@@ -44,4 +46,4 @@ Folders from the plan's layout (`apps/`, `services/`, `packages/`) are created w
 Run `make check` first. Common causes are in COMPLETED.md under Gotchas: Python 3.14, pre-release pins, Docker not on PATH, a full disk, free-tier rate limits.
 
 ## Licence
-Apache License 2.0, see [LICENSE](LICENSE). Files copied from NVIDIA projects keep their own Apache-2.0 notices (for example `spikes/s2-fabric-nat/LICENSE-NVIDIA-Fabric`).
+Apache License 2.0, see [LICENSE](LICENSE). Files copied from NVIDIA projects keep their own Apache-2.0 notices (for example `services/runner/nat_adapter/LICENSE-NVIDIA-Fabric`).

@@ -1,4 +1,4 @@
-# Agent Builder Platform: Master Plan (v8)
+# Agent Builder Platform: Master Plan (v9)
 
 Last updated: 2026-10-08. Personal open-source project on GitHub. No revenue, no funding, so **everything must be free or open source** (section 3).
 
@@ -8,6 +8,13 @@ Tags used for facts:
 - **[memory]**: from my background knowledge, not checked this session; confirm before adopting
 
 ## 0. Changes
+
+### v9 (2026-10-12, evidence from Phase 0 spikes S2 to S4 and S14)
+1. **Agent mode confirmed by data:** a 480-run suite (3 OpenAI models x NAT/Fabric x ReAct/tool calling x 20 varied tasks) showed tool calling is never worse than ReAct and clearly better only on the weakest model (gpt-4.1-nano: 97.5% vs 85 to 92.5%); Fabric matches plain NAT. `tool_calling` stays the default, ReAct the fallback (4.3). N=40 per cell; treat gaps as directional.
+2. **We own the NAT adapter** (`services/runner/nat_adapter/`): Fabric ships none, NVIDIA's reference is ReAct-only and ignores telemetry. Our copy adds tool calling, Relay activation and typed LLM/tool events (the Relay ATIF now has per-call model, tokens, tool arguments and results), and the repair hook.
+3. **Repair ladder step 1 (tool-name mapping) is built but unproven:** 0 triggers in a 60-run A/B, so it stays off by default; the earlier "prefix failure" did not reproduce on the varied suite (4.4.2).
+4. **Telemetry source of truth:** NAT-native ATIF + `nat eval` work today for plain NAT; Relay ATIF through our adapter is now rich enough to be the single source for Fabric-run agents. Decision deferred to S4 completion.
+5. **Key lessons that shape the product:** answer-matching hides bad runs (use trajectory scoring and server-side tool logs); free-tier LLMs are too flaky for evals; a Relay run needs four settings plus adapter support; subprocess PATH/venv issues are real for contributors.
 
 ### v8
 1. **New section 4.3: the LLM layer** (gateway, model routing, agent mode). Evidence from S2b: our NAT ReAct agent failed about half its runs on free models with `ReActAgentParsingFailedError` (model replied in the wrong text format, or returned nothing). Plain NAT failed the same way, so it is a model/agent-type problem, not a NAT-Fabric incompatibility. A gateway cannot repair that.
