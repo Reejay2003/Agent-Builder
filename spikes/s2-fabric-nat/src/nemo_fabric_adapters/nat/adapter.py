@@ -768,6 +768,10 @@ class NatRuntime:
         runtime_id = _runtime_id(payload)
         agent_config = _agent_config(payload)
         relay_config = self._resolve_relay(payload, agent_config)
+        if "tool_names" in os.environ.get("FABRIC_NAT_REPAIR", ""):  # local patch: deterministic repair, see repair.py
+            from nemo_fabric_adapters.nat import repair
+
+            repair.install_tool_name_repair()
         stack = AsyncExitStack()
         try:
             from nat.builder.workflow_builder import WorkflowBuilder
@@ -816,6 +820,9 @@ class NatRuntime:
             )
         common_utils.reject_ambient_relay_plugin_config()
         _ensure_relay_hook()
+        from nemo_fabric_adapters.nat import relay_events  # typed LLM/tool events (local addition)
+
+        relay_events.install_typed_relay_events()
         models = agent_config.models or {}
         model_name = next(iter(models.values())).model if models else "unknown"
         return common_utils.load_relay_plugin_config(
@@ -862,7 +869,9 @@ class NatRuntime:
                 metadata["nemo_fabric_invocation_id"] = runtime_context.invocation_id
                 with request_context:
                     with scope.scope("nat-request", ScopeType.Agent, metadata=metadata):
-                        token = _RELAY_HANDLER.set(NemoRelayCallbackHandler())
+                        # Graph-node scopes (RunnableSequence, conditional_edge, ...) bury the typed LLM/tool events several
+                        # levels deep in the ATIF, so they are opt-in: FABRIC_NAT_RELAY_GRAPH=1.
+                        token = _RELAY_HANDLER.set(NemoRelayCallbackHandler() if os.environ.get("FABRIC_NAT_RELAY_GRAPH") == "1" else None)
                         try:
                             result = await self._run_session(request, session_kwargs)
                         except Exception as error:
@@ -876,6 +885,10 @@ class NatRuntime:
     def _with_telemetry(self, result: AgentRunResult, telemetry_error: str | None) -> AgentRunResult:
         """Attach the telemetry block and Relay artifact references to the result output."""
 
+        if "tool_names" in os.environ.get("FABRIC_NAT_REPAIR", ""):
+            from nemo_fabric_adapters.nat import repair
+
+            result.output["repairs"] = list(repair.REPAIRS)  # cumulative for this runtime; never silent
         if self._relay_plugin_config is None:
             return result
         info: dict[str, Any] = {"enabled": True, "provider": "relay", "emitter": "nat.langchain/nemo_relay"}

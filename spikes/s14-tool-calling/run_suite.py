@@ -43,7 +43,7 @@ def run_job(job, base_env):
     log = tmp / "tools.jsonl"
     env = dict(base_env, LLM_MODEL=model, PATH=f"{ROOT / '.venv/bin'}:{base_env.get('PATH', '')}", VIRTUAL_ENV=str(ROOT / ".venv"),
                PYTHONPATH=str(ROOT / "spikes/s2-fabric-nat/src"), FABRIC_NAT_DEBUG="1", FABRIC_NAT_DEBUG_FILE=str(tmp / "debug.log"),
-               AB_TOOL_LOG_PATH=str(log))
+               AB_TOOL_LOG_PATH=str(log), FABRIC_NAT_REPAIR=base_env.get("FABRIC_NAT_REPAIR", ""))
     if mode.startswith("nat-"):
         tpl = (ROOT / "agents/mcp-agent" / ("workflow-react.yml" if mode == "nat-react" else "workflow-tool_calling.yml")).read_text()
         cfg = tmp / "wf.yml"
@@ -61,6 +61,7 @@ def run_job(job, base_env):
     dt = time.time() - t0
     text = ANSI.sub("", out + "\n" + err)
     answer = None
+    repairs = None
     if mode.startswith("nat-"):
         m = re.search(r"Workflow Result:\s*\n(.*?)\n-{10,}", text, re.S)
         answer = m.group(1).strip() if m else None
@@ -68,6 +69,7 @@ def run_job(job, base_env):
         try:
             d = json.loads(out.strip().splitlines()[-1])
             answer = (d.get("output") or {}).get("response")
+            repairs = (d.get("output") or {}).get("repairs")
             if d.get("status") != "succeeded":
                 dbg = tmp / "debug.log"
                 text += "\n" + (dbg.read_text() if dbg.exists() else "") + json.dumps(d.get("error"))
@@ -76,7 +78,7 @@ def run_job(job, base_env):
     calls = tools_called(log)
     called = set(calls)
     rec = dict(model=model, mode=mode, task=task["id"], cat=task["cat"], rep=rep, seconds=round(dt, 1), calls=calls,
-               answer=(answer or "")[:240])
+               answer=(answer or "")[:240], repairs=repairs or [])
     if re.search(r"\b429\b|rate limit", text, re.I) and answer is None: rec["outcome"] = "http_429"
     elif re.search(r"\b401\b|invalid_api_key", text) and answer is None: rec["outcome"] = "http_401"
     elif "TIMEOUT" in text: rec["outcome"] = "timeout"
@@ -127,10 +129,12 @@ if __name__ == "__main__":
     ap.add_argument("--workers", type=int, default=4)
     ap.add_argument("--tag", default="run1")
     ap.add_argument("--summary-only", action="store_true")
+    ap.add_argument("--repair", default="", help="e.g. tool_names: enable adapter-side deterministic repair (Fabric modes only)")
     a = ap.parse_args()
     out = HERE / "results" / f"suite-{a.tag}.jsonl"; out.parent.mkdir(exist_ok=True)
     if a.summary_only: summarize(out); sys.exit()
     env = load_env()
+    env["FABRIC_NAT_REPAIR"] = a.repair
     if re.search(r"\s", env.get("LLM_API_KEY", "")) or not env.get("LLM_API_KEY"): sys.exit("LLM_API_KEY missing or contains spaces")
     tasks = [t for t in TASKS if not a.tasks or t["id"] in a.tasks.split(",")]
     done = set()

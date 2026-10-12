@@ -44,6 +44,10 @@ Across all S14/S4 runs on this task, tool calling made no outright failures (it 
 (success %; "clean", i.e. no unrequested tool calls, is 82-100%, lowest for nano.) nano ReAct failures: parse errors, recursion-limit loops, wrong answers; nano tool-calling failures: calling a tool when none was needed. Hardest tasks: the fictional-timezone trap (f1, mostly ReAct) and no-tool questions (e2). Fabric matched plain NAT (no Fabric penalty). Tool calling was never worse; the only large gap is nano Fabric-ReAct (85%).
 **Read with care:** 40 runs per cell, so 97.5% vs 92.5% is one or two runs. Only the weakest model separates the agent types. The f1 checker may be strict (unverified). Raw rows: `results/suite-big1.jsonl` (git-ignored).
 
+## Tool-name repair (2026-10-12): built, tested offline, effect not yet shown
+`nat/repair.py` (our adapter copy, env `FABRIC_NAT_REPAIR=tool_names`, Fabric modes) maps a bare tool name the model calls (`add_numbers`) to the one real prefixed tool (`demo__add_numbers`); ambiguous or unknown names are never guessed; every repair is returned in the run output (`output.repairs`). Offline tests pass (`make test`).
+A/B on gpt-4.1-nano, Fabric ReAct, 60 runs each (`--repair tool_names`): **49/60 with and without; 0 repairs were triggered**, so the prefix failure did not occur in this varied suite (the earlier narrow-task failures did not reproduce either). Conclusion: the repair is harmless and ready, but its benefit is unproven; keep it off by default until a workload shows prefix errors. The remaining nano failures were wrong answers, tool calls where none were needed, one loop, and parse errors.
+
 ## Caveats (do not over-read)
 - N=5 per cell, one task, one MCP server, temperature 0. 3/5 vs 5/5 is suggestive, not statistically solid. Needs larger N and more tasks.
 - Only OpenAI models (the project key sees 11 models). `gpt-5*` are reasoning models and may reject a `temperature` setting [unverified]; not tested.

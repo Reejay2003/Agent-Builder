@@ -34,6 +34,12 @@ S14's matrix showed nano ReAct 3/5 vs tool calling 5/5. **This larger run did no
 **Limit:** the Relay LangChain callback handler only maps chain/graph runs here. Events are all category `agent` (LangGraph nodes, `tool` nodes with the ReAct scratchpad in `data`); there are no LLM-typed or tool-typed scopes, so the ATIF has 1 step and no token metrics. NAT-native ATIF (above) is far richer today. Getting typed LLM/tool events needs Relay's LangGraph `ToolNode`/middleware integration or NAT-level hooks (not done).
 **Recommendation:** use NAT-native ATIF + `nat eval` as the evaluation source of truth now; keep the patched Relay path for Fabric-level run artifacts and revisit when typed events are needed.
 
+## Update (2026-10-12): typed Relay events, both agent types
+`relay_events.py` (in our adapter copy) wraps NAT's shared `BaseAgent._call_tool/_stream_llm/_call_llm` (ReAct) and `ToolCallAgentGraph._invoke_llm/tool_node` (tool calling) to emit real Relay LLM and tool spans. Result in the Relay ATIF (v1.7), flat: a user step, then one agent step per LLM call with the **model name, the reasoning text and prompt/completion token counts**, each with its **tool calls (name + arguments) and results** (`observation.results[].extra.tool_result`). Example, ReAct, 6 steps, 1,520 prompt / 155 completion tokens; tool calling, 4 steps, 389 / 96. Telemetry failures never affect the run (`_safe` wrappers).
+- Relay's LangChain graph handler is now opt-in (`FABRIC_NAT_RELAY_GRAPH=1`): it adds node scopes (RunnableSequence, conditional_edge...) that bury the typed steps 3 levels deep as nested sub-trajectories.
+- Two bugs found while building this: duplicate tool calls appeared when tool calls were also put in the LLM response/annotation (removed), and the first step had no tokens until usage was mapped (`input_tokens` -> `prompt_tokens`).
+- Still to do: use this ATIF in the eval harness (NAT-native ATIF remains the eval source for plain NAT runs); OTel export untested.
+
 ## Relay (earlier finding, kept for history)
 - `nemo-relay` is Apache-2.0 on PyPI (0.10.0 latest; `pip install "nemo-fabric[relay]==0.4.0"` pulled 0.9.4).
 - Fabric 0.4.0 has first-class Relay config (`FabricConfig.relay = RelayConfig(observability=RelayObservabilityConfig(atof=..., atif=..., opentelemetry=...))`) and `doctor` accepts it.
