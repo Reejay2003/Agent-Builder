@@ -56,10 +56,8 @@ Tags used for facts:
 
 ## 1. Reality check before building
 
-### 1.1 NeMo Helix overlaps with this product
-NVIDIA's Fabric ecosystem page lists **NeMo Helix** as a platform for building, deploying, evaluating and improving agents; it translates agent definitions into Fabric configuration and Fabric runs the harness **[verified]**. Not checked: whether Helix is self-hostable, free, no-code, or supports BYOK.
-
-**Implication:** the defensible part of this project is the **guided, non-technical experience** (BYOK, templates, risk-tiered tool basket, no-code connection of your own data and systems, safe defaults), not the plumbing. Spike S5 decides whether to build on Helix, borrow ideas, or ignore it.
+### 1.1 Positioning
+Other tools in NVIDIA's agent ecosystem already cover parts of building, running and evaluating agents (the plumbing). The defensible part of this project is the **guided, non-technical experience**: BYOK, templates, a risk-tiered tool basket, no-code connection of your own data and systems, and safe defaults.
 
 ### 1.2 Maturity of the stack
 | Component | Version seen | Status |
@@ -578,7 +576,7 @@ Speech providers (pluggable):  open-source ASR/TTS (default, CPU-friendly)  |  N
 | S2 NAT via Fabric | Wire NAT as Fabric's shared-framework adapter target; run `plan`, `doctor`, `run` | A `RunResult` with telemetry refs |
 | S3 Inside OpenShell | Run S2 in an OpenShell sandbox using a NemoClaw-style blueprint with a generated policy | Allowed egress works, denied egress is blocked; note start-up time and RAM per sandbox |
 | S4 Relay and evals | Relay emits ATIF from S3; NAT eval and Evaluator each score it; try OPA via Relay middleware | One scored trajectory; decision on telemetry source of truth |
-| S5 Helix check | Read Helix and Studio Agents docs: free, self-hostable, no-code, BYOK? | Build / borrow / ignore decision |
+| S5 (retired) | Removed from the plan; the number is kept so S6 onward stay stable | n/a |
 | S6 Free-stack run | Run S1 to S4 fully on a laptop with Ollama, no cloud spend | Works end to end, and the quality of the small model is noted |
 | S7 Licences | Read Fabric and Relay licence pages, OpenShell Support Matrix and licence, NIM or Riva EULA | One-page licence table committed to `docs/` |
 | S8 Speech (optional) | Compare open ASR/TTS vs Riva/Nemotron Speech on latency and Hindi/English | Numbers, plus a go or no-go for GPU speech |
@@ -631,7 +629,7 @@ agent-platform/
   spikes/                    # S1..S14
   docs/                      # this plan, ADRs, licence table
 ```
-Write ADRs for: NAT-as-agent-layer, OpenShell tenancy model, Helix decision, telemetry source of truth, where OPA and Guardrails hook in, speech provider interface, knowledge service as own MCP service vs NAT retriever, embedding model and versioning policy, how tenant scope is injected, semantic model and tool generation from connectors, NL-to-SQL guard policy, channel and trigger identity model, agent mode selection and the model capability table, gateway choice (OpenRouter vs LiteLLM) and Switchyard's optional role.
+Write ADRs for: NAT-as-agent-layer, OpenShell tenancy model, telemetry source of truth, where OPA and Guardrails hook in, speech provider interface, knowledge service as own MCP service vs NAT retriever, embedding model and versioning policy, how tenant scope is injected, semantic model and tool generation from connectors, NL-to-SQL guard policy, channel and trigger identity model, agent mode selection and the model capability table, gateway choice (OpenRouter vs LiteLLM) and Switchyard's optional role.
 
 ## 15. Risks
 1. **Scope.** Mitigation: vertical slice first, caller agents last.
@@ -639,7 +637,7 @@ Write ADRs for: NAT-as-agent-layer, OpenShell tenancy model, Helix decision, tel
 3. **OpenShell fit.** Every published example is a coding agent; many short multi-user sessions are unproven, and its host OS and hardware requirements are unread. Mitigation: S3 and S7.
 4. **Licences.** Fabric, Relay and OpenShell terms are not yet read; NVIDIA free tiers are dev/test only. Mitigation: S7, optional providers.
 5. **Weak free models.** Small local models give poor agents; templates must degrade gracefully and the docs should say so.
-6. **Helix overlap.** Mitigation: S5, then sharpen positioning on guided UX.
+6. **Overlap with other NVIDIA agent tooling.** Mitigation: sharpen positioning on the guided experience (section 1.1).
 7. **BYOK security and tenant isolation.** Mitigation: design secrets first, security review.
 8. **Voice cost and regulation.** Mitigation: optional, last, free WebRTC path first.
 9b. **Model output-format failures** (S2b: ReAct parse errors on free models, about half of runs). Mitigation: native tool calling by default, ReAct fallback, the wizard model check and limited mode, the repair ladder (4.4.2), capability table, eval gate that blocks weak model and template pairs, S14. Residual risk: repair does not stop wrong answers or answers given without calling a tool; only the gate and grounding rules do.
@@ -662,7 +660,7 @@ Write ADRs for: NAT-as-agent-layer, OpenShell tenancy model, Helix decision, tel
 - NeMo Agent Toolkit: https://github.com/NVIDIA/NeMo-Agent-Toolkit
 - NeMo Fabric overview: https://docs.nvidia.com/nemo/fabric/about-nemo-fabric/overview
 - NeMo Fabric adapter contract (NAT as shared framework adapter): https://docs.nvidia.com/nemo/fabric/adapter-contract/overview
-- NeMo Fabric ecosystem (Helix, NemoClaw, Gym, Polar): https://docs.nvidia.com/nemo/fabric/about-ne-mo-fabric/ecosystem
+- NeMo Fabric ecosystem (NemoClaw, Gym, Polar): https://docs.nvidia.com/nemo/fabric/about-ne-mo-fabric/ecosystem
 - NeMo Relay overview: https://docs.nvidia.com/nemo/relay/about-nemo-relay/overview
 - OpenShell docs: https://docs.nvidia.com/openshell/about/llms.txt and https://github.com/NVIDIA/OpenShell
 - OpenShell community sandboxes: https://github.com/NVIDIA/OpenShell-Community
@@ -674,7 +672,6 @@ Write ADRs for: NAT-as-agent-layer, OpenShell tenancy model, Helix decision, tel
 - NeMo Retriever docs and support matrix: https://nvidia.github.io/NeMo-Retriever/extraction/prerequisites-support-matrix/
 - NeMo Retriever (Nemotron embedding and reranking models): https://developer.nvidia.com/nemo-retriever/
 - NeMo Evaluator: https://github.com/NVIDIA-NeMo/Evaluator
-- NeMo Helix: https://github.com/NVIDIA-NeMo/nemo-helix
 - NIM FAQ (free tier and Developer Program terms): https://forums.developer.nvidia.com/t/nvidia-nim-faq/300317
 - Riva free-usage thread: https://forums.developer.nvidia.com/t/riva-can-be-deployed-free-of-charge-up-to-a-certain-usage-limit-clarifications/209902
 - Nemotron Speech self-hosting FAQ: https://perspectives.nvidia.com/nemotron-speech/task/faq/speech-ai-models-self-host-high-call-volumes/

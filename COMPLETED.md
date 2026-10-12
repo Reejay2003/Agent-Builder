@@ -55,7 +55,6 @@ Cleanup already done: adapter moved to `services/runner/nat_adapter/` (own READM
 | S14 (rest) | Remaining: larger N and more tasks; Fabric tool-calling target (custom adapter?); wizard probe + repair step 1 (tool-name suffix mapping) and 3; LiteLLM gateway; Switchyard trial ([PLAN 4.3, 4.4, S14](PLAN.md)) | An LLM key (OpenAI key works; free tier is 50 requests/day) | (unclaimed) | partial |
 | S4 (rest) | Try NeMo Evaluator; read Relay ATIF in the eval harness; OTel export; formally decide telemetry source of truth (Relay ATIF is now rich enough to be a candidate) | S2 | (unclaimed) | partial |
 | S7 | Licence table in `docs/` | reading only | (unclaimed) | partial: NAT, Fabric, OpenShell, NeMo Retriever, Switchyard are Apache-2.0 [verified]; Relay, NIM/Riva terms, embedding model licences not read |
-| S5 | Helix check (build on, borrow from, or ignore) | reading only | (unclaimed) | not started |
 | S6 | Whole stack on a laptop with Ollama, no cloud spend | Ollama | (unclaimed) | not started |
 | S9 | RAG baseline: pgvector_lite vs NeMo Retriever on about 50 real documents | documents, optional GPU | (unclaimed) | not started |
 | S10 | NAT retrievers and RAG evals | S9 | (unclaimed) | not started |
@@ -142,7 +141,7 @@ One section per phase of the [PLAN roadmap](PLAN.md#13-roadmap-after-phase-0). W
 | Docker / dev environment | Compose stack, pinned requirements, `make` targets, clean-install verified | **done** | `deploy/`, `requirements.lock`, `make check` |
 
 **Carry-overs (tracked in Next up; none blocks Phase 1):**
-- **Reading only:** S5 (Helix check) and the rest of S7 (Relay and NIM/Riva/embedding licences).
+- **Reading only:** the rest of S7 (Relay and NIM/Riva/embedding licences). (S5 was retired from the plan.)
 - **Phase 0 leftovers:** S6 (full run on Ollama, no spend); S4 rest (NeMo Evaluator, Relay ATIF in the eval harness, OTel export); S14 rest (gateway, Switchyard trial, model probe, larger N); tool-name repair benefit unproven.
 - **Needed before Phase 3 and 4, not before Phase 1:** S9 to S13 (RAG baseline, NAT retrievers and RAG evals, database connector, OpenAPI to tools, NeMo Retriever multi-tenancy). S8 (speech) is optional.
 
