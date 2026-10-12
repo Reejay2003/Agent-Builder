@@ -11,4 +11,4 @@ Fabric ships no NAT adapter; NVIDIA publishes a source-only reference (`NVIDIA/N
 | Debug tracebacks to a file | `adapter.py` | `FABRIC_NAT_DEBUG=1` |
 
 Run the offline tests with `make test`. The adapter host runs as a subprocess and needs `PYTHONPATH=services/runner/nat_adapter/src` and the venv first on PATH (the Makefile and test harnesses set both).
-Pinned: NAT 1.9.0, Fabric 0.4.0, nemo-relay 0.9.x (via `nemo-fabric[relay]`, not in `requirements.txt` yet).
+Pinned in `requirements.txt`: NAT 1.9.0, Fabric 0.4.0, nemo-relay 0.9.4. Verified from a clean install: `make setup && make test`.

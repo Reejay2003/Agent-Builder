@@ -315,6 +315,8 @@ nemo-fabric-adapters-common==0.4.0
     # via -r requirements.txt
 nemo-fabric-runtime==0.4.0
     # via nemo-fabric
+nemo-relay==0.9.4
+    # via -r requirements.txt
 nest-asyncio2==1.7.4
     # via nvidia-nat-core
 networkx==3.7

@@ -10,3 +10,4 @@ nvidia-nat-eval[full]==1.9.0   # `nat eval`: datasets, trajectory scoring, ATIF 
 nemo-fabric==0.4.0
 nemo-fabric-adapter-contract==0.4.0
 nemo-fabric-adapters-common==0.4.0
+nemo-relay==0.9.4   # Relay telemetry (ATOF/ATIF); same version `nemo-fabric[relay]==0.4.0` resolved to
