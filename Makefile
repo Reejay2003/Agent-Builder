@@ -6,7 +6,7 @@ COMPOSE := docker compose -f deploy/compose/docker-compose.yml --env-file .env
 # LLM_API_KEY falls back to OPENROUTER_API_KEY so older .env files keep working
 RUN_ENV := set -a; . ./.env; set +a; export LLM_API_KEY="$${LLM_API_KEY:-$$OPENROUTER_API_KEY}"; . .venv/bin/activate
 
-.PHONY: help test eval env setup setup-full check up down ps logs agent fabric-agent fabric-doctor sandbox-image dev-shell
+.PHONY: help sdk-check sdk-test-nat test eval env setup setup-full check up down ps logs agent fabric-agent fabric-doctor sandbox-image dev-shell
 
 help:  ## list targets
 	@grep -E '^[a-zA-Z_-]+:.*##' Makefile | awk -F':.*## ' '{printf "  %-16s %s\n", $$1, $$2}'
@@ -16,9 +16,9 @@ env:  ## create .env from the template (does not overwrite)
 
 setup: env  ## create .venv and install pinned dependencies (uses uv if installed, else pip)
 	@if command -v uv >/dev/null; then \
-	  uv venv --python 3.12 --allow-existing .venv && uv pip install --python .venv/bin/python -r requirements.lock; \
+	  uv venv --python 3.12 --allow-existing .venv && uv pip install --python .venv/bin/python -r requirements.lock && uv pip install --python .venv/bin/python -e "packages/sdk[dev]"; \
 	elif [ -n "$(PY)" ]; then \
-	  $(PY) -m venv .venv && .venv/bin/pip install -q --upgrade pip && .venv/bin/pip install -q -r requirements.lock; \
+	  $(PY) -m venv .venv && .venv/bin/pip install -q --upgrade pip && .venv/bin/pip install -q -r requirements.lock && .venv/bin/pip install -q -e "packages/sdk[dev]"; \
 	else echo "No Python 3.11-3.13 found. Install uv (https://docs.astral.sh/uv/) or Python 3.12, or run: make setup PY=/path/to/python3.12"; exit 1; fi
 	@echo "Done. Next: make check"
 
@@ -42,6 +42,12 @@ logs:  ## follow service logs
 
 agent:  ## run the simple NAT agent: make agent Q="your question"
 	$(RUN_ENV); nat run --config_file agents/simple-agent/workflow.yml --input "$${Q:-Who created Python, and what is the date today?}"
+
+sdk-check:  ## SDK: ruff, format, mypy --strict and offline tests (no key, no cost)
+	. .venv/bin/activate; cd packages/sdk && ruff check . && ruff format --check . && mypy && python -m pytest -q -m "not nat" -W ignore
+
+sdk-test-nat:  ## SDK: real NAT agents against the fake OpenAI server (needs the full setup; no key, no cost)
+	. .venv/bin/activate; cd packages/sdk && python -m pytest -q -m nat -W ignore
 
 test:  ## offline tests for our adapter additions (no LLM, no cost)
 	$(RUN_ENV); python services/runner/nat_adapter/test_adapter_patches.py

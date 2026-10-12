@@ -11,3 +11,11 @@ node_modules/
 data/
 
 third_party/
+
+# Python tooling caches and build output
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+dist/
+build/
+*.egg-info/

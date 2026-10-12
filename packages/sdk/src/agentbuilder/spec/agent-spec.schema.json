@@ -1,0 +1,482 @@
+{
+  "$defs": {
+    "ApprovalsSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "tier2_external_comms": {
+          "default": "require_human",
+          "enum": [
+            "require_human",
+            "allow"
+          ],
+          "title": "Tier2 External Comms",
+          "type": "string"
+        },
+        "tier3_destructive": {
+          "default": "block",
+          "enum": [
+            "block",
+            "require_human"
+          ],
+          "title": "Tier3 Destructive",
+          "type": "string"
+        }
+      },
+      "title": "ApprovalsSpec",
+      "type": "object"
+    },
+    "EvalsSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "publish_threshold": {
+          "default": 0.85,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Publish Threshold",
+          "type": "number"
+        },
+        "suite": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Suite"
+        }
+      },
+      "title": "EvalsSpec",
+      "type": "object"
+    },
+    "GuardrailsSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "profile": {
+          "default": "standard",
+          "enum": [
+            "strict",
+            "standard",
+            "relaxed"
+          ],
+          "title": "Profile",
+          "type": "string"
+        }
+      },
+      "title": "GuardrailsSpec",
+      "type": "object"
+    },
+    "InstructionsSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "persona": {
+          "default": "",
+          "title": "Persona",
+          "type": "string"
+        },
+        "rules": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Rules",
+          "type": "array"
+        }
+      },
+      "title": "InstructionsSpec",
+      "type": "object"
+    },
+    "ModelSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "agent_mode": {
+          "default": "auto",
+          "enum": [
+            "auto",
+            "tool_calling",
+            "react"
+          ],
+          "title": "Agent Mode",
+          "type": "string"
+        },
+        "base_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Base Url"
+        },
+        "capability_tier": {
+          "anyOf": [
+            {
+              "enum": [
+                "strong",
+                "standard",
+                "limited",
+                "unsuitable"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Capability Tier"
+        },
+        "credential_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Credential Ref"
+        },
+        "max_tokens": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Tokens"
+        },
+        "model": {
+          "minLength": 1,
+          "title": "Model",
+          "type": "string"
+        },
+        "provider": {
+          "enum": [
+            "openai",
+            "openrouter",
+            "ollama",
+            "nvidia_hosted",
+            "openai_compatible"
+          ],
+          "title": "Provider",
+          "type": "string"
+        },
+        "reliability": {
+          "$ref": "#/$defs/ReliabilitySpec"
+        },
+        "routing": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RoutingSpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "temperature": {
+          "anyOf": [
+            {
+              "maximum": 2,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Temperature"
+        }
+      },
+      "required": [
+        "provider",
+        "model"
+      ],
+      "title": "ModelSpec",
+      "type": "object"
+    },
+    "ReliabilitySpec": {
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "default": "normal",
+          "enum": [
+            "normal",
+            "limited"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "repair": {
+          "$ref": "#/$defs/RepairSpec"
+        },
+        "tier": {
+          "anyOf": [
+            {
+              "enum": [
+                "strong",
+                "standard",
+                "limited",
+                "unsuitable"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tier"
+        }
+      },
+      "title": "ReliabilitySpec",
+      "type": "object"
+    },
+    "RepairSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "escalate_to": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Escalate To"
+        },
+        "max_attempts": {
+          "default": 3,
+          "maximum": 10,
+          "minimum": 0,
+          "title": "Max Attempts",
+          "type": "integer"
+        },
+        "steps": {
+          "items": {
+            "enum": [
+              "tool_names",
+              "retry",
+              "reprompt"
+            ],
+            "type": "string"
+          },
+          "title": "Steps",
+          "type": "array"
+        }
+      },
+      "title": "RepairSpec",
+      "type": "object"
+    },
+    "RoutingSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "models": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Models",
+          "type": "array"
+        },
+        "provider": {
+          "title": "Provider",
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider",
+        "algorithm"
+      ],
+      "title": "RoutingSpec",
+      "type": "object"
+    },
+    "SandboxSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "policy_preset": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Policy Preset"
+        }
+      },
+      "title": "SandboxSpec",
+      "type": "object"
+    },
+    "ToolRef": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "settings": {
+          "additionalProperties": true,
+          "title": "Settings",
+          "type": "object"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "title": "ToolRef",
+      "type": "object"
+    }
+  },
+  "$id": "https://github.com/Reejay2003/Agent-Builder/schemas/agent-spec.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "approvals": {
+      "$ref": "#/$defs/ApprovalsSpec"
+    },
+    "channels": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Channels",
+      "type": "array"
+    },
+    "description": {
+      "default": "",
+      "title": "Description",
+      "type": "string"
+    },
+    "evals": {
+      "$ref": "#/$defs/EvalsSpec"
+    },
+    "guardrails": {
+      "$ref": "#/$defs/GuardrailsSpec"
+    },
+    "id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Id"
+    },
+    "instructions": {
+      "$ref": "#/$defs/InstructionsSpec"
+    },
+    "integrations": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Integrations",
+      "type": "array"
+    },
+    "knowledge": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Knowledge"
+    },
+    "metadata": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Metadata",
+      "type": "object"
+    },
+    "model": {
+      "$ref": "#/$defs/ModelSpec"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "sandbox": {
+      "$ref": "#/$defs/SandboxSpec"
+    },
+    "spec_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Spec Version",
+      "type": "integer"
+    },
+    "tools": {
+      "items": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/ToolRef"
+          },
+          {
+            "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$",
+            "type": "string"
+          }
+        ]
+      },
+      "title": "Tools",
+      "type": "array"
+    },
+    "type": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Type"
+    },
+    "voice": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Voice"
+    }
+  },
+  "required": [
+    "name",
+    "model"
+  ],
+  "title": "AgentSpec",
+  "type": "object"
+}

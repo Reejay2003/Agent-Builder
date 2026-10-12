@@ -1,0 +1,58 @@
+name: sdk-ci
+
+on:
+  push:
+    paths: ["packages/sdk/**", ".github/workflows/sdk-ci.yml"]
+  pull_request:
+    paths: ["packages/sdk/**", ".github/workflows/sdk-ci.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: lint, types, tests (${{ matrix.os }}, py${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python: ["3.11", "3.12", "3.13"]
+    defaults:
+      run:
+        working-directory: packages/sdk
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install -e ".[dev]"
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: mypy
+      # Offline tests only: no API key, no NVIDIA stack, no cost. The `nat` marker needs the full repo setup.
+      - run: python -m pytest -m "not nat"
+
+  clean-install:
+    name: wheel installs in an empty environment and imports without NVIDIA packages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install build
+      - run: python -m build --wheel packages/sdk --outdir dist
+      - run: |
+          python -m venv /tmp/clean
+          /tmp/clean/bin/pip install dist/*.whl
+          /tmp/clean/bin/python - <<'PY'
+          import sys
+          import agentbuilder
+          from agentbuilder.spec import AgentSpec
+          spec = AgentSpec.from_dict({"name": "demo", "model": {"provider": "openai", "model": "gpt-4.1-mini"}})
+          assert spec.to_yaml().startswith("spec_version: 1")
+          bad = sorted(m for m in sys.modules if m.split(".")[0] in {"nat", "nemo_fabric", "nemo_relay", "langchain"})
+          assert not bad, f"core SDK must not import NVIDIA or LangChain packages: {bad}"
+          print("clean install ok", agentbuilder.__version__)
+          PY

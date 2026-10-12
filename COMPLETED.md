@@ -40,8 +40,8 @@ Status values: `not started` / `in progress` / `blocked` / `done` / `partial`. T
 Phase 0 has enough evidence to start Phase 1 ([PLAN section 13](PLAN.md)). Suggested order, each small and independent:
 | # | Task | Output | Owner | Status |
 |---|---|---|---|---|
-| P1.0 | **SDK skeleton** (`packages/sdk/`: pyproject, ruff, mypy, pytest, pre-commit, CI) and `FakeModel` test harness ([PLAN 16](PLAN.md)) | `packages/sdk/`, `.github/workflows/` | (unclaimed) | not started |
-| P1.1 | **AgentSpec** JSON Schema + typed models (becomes `agentbuilder.spec`) | `packages/agent-spec/` (spec_version 1, validated examples: personal_automation, support) | (unclaimed) | not started |
+| P1.0 | **SDK skeleton** (`packages/sdk/`: pyproject, ruff, mypy, pytest, pre-commit, CI) and `FakeModel` test harness ([PLAN 16](PLAN.md)) | `packages/sdk/`, `.github/workflows/` | owner + Claude | **done 2026-10-12** (CI workflow written, not yet run: needs a push) |
+| P1.1 | **AgentSpec** JSON Schema + typed models (becomes `agentbuilder.spec`) | `packages/sdk/src/agentbuilder/spec/`, 2 example specs (support example still to add) | owner + Claude | **done 2026-10-12** |
 | P1.2 | **Compiler A/B**: AgentSpec -> NAT workflow + `FabricConfig` (agent mode from `model.agent_mode`, tools from manifests, Relay on) | `services/runner/compiler/`, golden-file tests, `make test` | (unclaimed) | not started |
 | P1.3 | **Runner service**: run a compiled spec through Fabric, return result + ATIF | `services/runner/` FastAPI endpoint `POST /runs` | (unclaimed) | not started |
 | P1.4 | **Tool store v0**: manifests for demo + Gmail/Calendar tools, MCP gateway stub | `packages/tool-manifests/`, `services/mcp-gateway/` | (unclaimed) | not started |
@@ -76,6 +76,7 @@ Cleanup already done: adapter moved to `services/runner/nat_adapter/` (own READM
 | 2026-10-10 | **Stay on a light/free LLM for now** (default `nvidia/nemotron-3-super-120b-a12b:free` via OpenRouter) | Cost; accept weaker agents and expect flaky runs until S14 | `.env.example` |
 | 2026-10-11 | Project licence is **Apache-2.0** (there is no "Apache 2.1"); `LICENSE` is the unmodified official text from apache.org | Matches the NVIDIA stack, includes a patent grant, friendly to contributors | `LICENSE` |
 | 2026-10-11 | Development default model is **gpt-4.1-mini** via OpenAI (paid, cents per test run); free OpenRouter model is the zero-cost fallback. Supersedes "stay on a free LLM" for day-to-day work | Measured: gpt-4.1-mini is 15/15 across NAT and Fabric; free and nano models are flaky with ReAct | `.env.example`, S14 |
+| 2026-10-12 | **SDK names confirmed by the owner:** distribution and import name `agentbuilder`, location `packages/sdk/` (CLI `ab` and adapter `agentbuilder-nat` still proposed) | Owner decision | PLAN 16.10 |
 | 2026-10-12 | **The project becomes an SDK**: `agentbuilder` core library (Python first) with the wizard, server and CLI as clients; adapter ships as `agentbuilder-nat`. Assumptions (audience, names, languages, API shape) await owner confirmation | The AgentSpec contract already separates definition from execution; an SDK makes it usable by developers and by the wizard | PLAN 16 |
 | 2026-10-12 | **We own our NAT adapter** (patched copy of NVIDIA's Apache-2.0 reference, now in `services/runner/nat_adapter/`): supports ReAct and tool calling, Relay activation with typed LLM/tool events, tool-name repair; later repair steps go here | Upstream has no maintained NAT adapter and the reference is ReAct-only | `spikes/s2-fabric-nat/`, PLAN 4.1 |
 | 2026-10-11 | **Native tool calling is the default agent mode** (confirmed by S14 data); ReAct is the fallback | gpt-4.1-nano: tool calling 5/5 vs ReAct 3/5 | PLAN 4.3 |
@@ -104,6 +105,8 @@ Cleanup already done: adapter moved to `services/runner/nat_adapter/` (own READM
 - **`.env` keys must be one unbroken line, no spaces.** A key pasted with wrapped spaces makes the shell run fragments as commands and the key arrives empty (HTTP 401). A mis-copied key also gives 401; re-copy with the provider's copy button.
 - **System Python 3.13 here has no CA certificates** (`CERTIFICATE_VERIFY_FAILED` with urllib); use `.venv/bin/python` for HTTPS calls.
 - **Do not judge an agent run by its final text:** one "success" contained a made-up date. S14's harness checks the real time and the MCP server's own call log.
+- **zsh does not word-split unquoted variables:** `flag="--repair tool_names"; cmd $flag` passes ONE argument. Use arrays or write the flag out. (Bit us twice.)
+- **Run the SDK checks from `packages/sdk/`** (`make sdk-check` does): ruff, mypy and pytest read `packages/sdk/pyproject.toml`.
 - **`--no-keep` OpenShell sandboxes** can keep their name for a few seconds ("already exists"); use a new name.
 
 ## Open questions / blockers
@@ -113,6 +116,7 @@ Cleanup already done: adapter moved to `services/runner/nat_adapter/` (own READM
 - Relay licence and version compatibility with Switchyard's plugin (needs Relay 0.8 to under 1.0). (S4, S7)
 
 ## Changelog (newest first, one line each)
+- 2026-10-12: SDK week 1 done: `packages/sdk/` skeleton + CI file, AgentSpec (models, schema, load/save, migrations), FakeModel and fake OpenAI server; 65 offline tests + 2 NAT integration tests.
 - 2026-10-12: PLAN v10: SDK plan (section 16); Phase 1 tracker gets P1.0 SDK skeleton.
 - 2026-10-12: Added per-phase completion sections at the end (Phase 0 completed, Phase 1 to 8 placeholders).
 - 2026-10-12: Phase 1 cleanup: adapter moved to `services/runner/nat_adapter/`, README/paths updated, Phase 1 kickoff list added.
@@ -151,11 +155,13 @@ One section per phase of the [PLAN roadmap](PLAN.md#13-roadmap-after-phase-0). W
 **Phase 0 decisions worth remembering:** tool calling is the default agent mode, ReAct the fallback; we own the NAT adapter; `pgvector_lite` is the default retrieval engine; Switchyard is optional; free-tier LLMs are not reliable enough for evals (dev default `gpt-4.1-mini`). Full list under **Decisions**.
 
 ## Phase 1 completed: Vertical slice (weeks 3 to 6)
-**Deliverable:** wizard (BYOK, model check, personal-automation template, 5 to 8 tools), AgentSpec, compilers A to C, run in an OpenShell sandbox in test mode, trace view. Task list: **Phase 1 kickoff** above (P1.1 to P1.7).
+**Deliverable:** wizard (BYOK, model check, personal-automation template, 5 to 8 tools), AgentSpec, compilers A to C, run in an OpenShell sandbox in test mode, trace view. Task list: **Phase 1 kickoff** above (P1.0 to P1.7). Decided 2026-10-12: distribution and import name `agentbuilder`, location `packages/sdk/`.
 
 | Task | Date | Evidence | Notes |
 |---|---|---|---|
-| _nothing completed yet_ | | | |
+| SDK-1 package skeleton (P1.0) | 2026-10-12 | `packages/sdk/pyproject.toml`, `make sdk-check`, `.github/workflows/sdk-ci.yml`, `.pre-commit-config.yaml`, `scripts/scan_secrets.py` | ruff, `mypy --strict`, pytest all green locally; wheel builds and installs into an empty venv with zero NVIDIA/LangChain imports. CI file written but unrun until pushed; pre-commit configured, not installed (`pre-commit install`) |
+| SDK-2 AgentSpec (P1.1) | 2026-10-12 | `agentbuilder/spec/` (models, io, migrate, schema), `agent-spec.schema.json`, `examples/specs/*.agent.yaml` | Strict (unknown fields rejected), frozen, credentials by reference only, key-shaped values rejected anywhere, tool shorthand, safe_load only, version migrations (none yet), committed JSON Schema checked by a test, lossless round trip (dict, YAML, JSON, file) |
+| SDK-3 FakeModel (P1.0) | 2026-10-12 | `agentbuilder/testing/` (`FakeModel`, `FakeOpenAIServer`), `tests/integration/test_nat_against_fake_server.py` | Scripted offline model; OpenAI-compatible server (streaming + non-streaming). A real NAT tool-calling agent and a real ReAct agent (with the real MCP tool) both ran end to end against it with zero API calls. 65 offline tests + 2 NAT integration tests |
 
 ## Phase 2 completed: Safety (weeks 7 to 9)
 **Deliverable:** guardrail profiles, OPA policies, risk tiers, approval UI, per-tool sandbox policy generation.

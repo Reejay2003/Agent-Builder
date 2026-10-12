@@ -7,6 +7,7 @@
 
 ## Working rules
 - **One task per branch and PR.** Branch names: `s4-relay-atif`, `fix/check-env-linux`, `docs/plan-wizard`.
+- **SDK changes:** run `make sdk-check` (ruff, mypy --strict, offline tests; free, no key). If you change the AgentSpec models, regenerate the schema with `python -m agentbuilder.spec.schema --write` or the schema test fails on purpose.
 - **Update COMPLETED.md in the same PR.** Done item with date + evidence, new gotchas, any changed decision (new row, do not edit old ones).
 - **Spikes live in `spikes/<id>-<name>/`** with a `README.md` containing: the question, how to run it, the result (pass, partial, fail), and what surprised you. A failed spike is a valid result; write it down.
 - **Pin versions.** NVIDIA's pieces are 0.x. Add new dependencies to `requirements.txt` with exact versions, then run `uv pip compile requirements.txt --universal --python-version 3.12 -o requirements.lock` and commit both. Do not use `--prerelease` for the core set.

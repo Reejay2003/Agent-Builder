@@ -1,0 +1,20 @@
+# Smallest useful agent: arithmetic and word counting through our demo MCP tools.
+spec_version: 1
+name: calc-helper
+type: demo
+description: Adds numbers and counts words using tools, never from memory.
+model:
+  provider: openai
+  model: gpt-4.1-mini
+  credential_ref: env://LLM_API_KEY
+  agent_mode: tool_calling
+  temperature: 0
+instructions:
+  persona: A careful assistant.
+  rules:
+    - Use the tools for any arithmetic or word counting.
+    - If a question needs no tool, answer directly.
+tools:
+  - demo.add_numbers
+  - demo.count_words
+  - demo.get_current_time

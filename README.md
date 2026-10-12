@@ -26,6 +26,7 @@ make fabric-agent # same agent through NeMo Fabric
 | [PLAN.md](PLAN.md) | The master plan (architecture, wizard, phases, spikes, risks) |
 | [COMPLETED.md](COMPLETED.md) | Progress, decisions, gotchas, next tasks. Update it with every PR |
 | `agents/simple-agent/` | A minimal NAT agent (YAML) |
+| `packages/sdk/` | The `agentbuilder` SDK (pre-alpha): AgentSpec, test helpers; run `make sdk-check` |
 | `services/runner/nat_adapter/` | Our NAT adapter for Fabric (ReAct + tool calling, Relay, repair); run `make test` |
 | `packages/mcp-tools/`, `packages/tool-manifests/` | Demo MCP server and its tool manifest (the start of the tool store) |
 | `spikes/` | Phase 0 experiments, one folder each, with a README holding the result |

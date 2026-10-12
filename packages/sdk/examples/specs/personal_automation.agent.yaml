@@ -1,0 +1,40 @@
+# The MVP template (PLAN 2.1): email triage, calendar, reminders, daily brief. Tools are the Phase 1 basket.
+spec_version: 1
+name: personal-assistant
+type: personal_automation
+description: Triages email, manages the calendar and sends a daily brief. Drafts only; a human sends.
+model:
+  provider: openrouter
+  model: nvidia/nemotron-3-super-120b-a12b:free
+  base_url: https://openrouter.ai/api/v1
+  credential_ref: secret://llm/primary
+  agent_mode: auto
+  reliability:
+    mode: limited
+    repair:
+      max_attempts: 3
+      steps: [tool_names, retry]
+instructions:
+  persona: A concise, careful personal assistant.
+  rules:
+    - Never send email; create drafts for the user to review.
+    - Show the exact payload before any action that contacts another person.
+tools:
+  - id: gmail.read
+  - id: gmail.send_draft
+  - id: calendar.list_events
+  - id: calendar.create_event
+  - id: sheets.read
+  - id: web.search
+guardrails:
+  profile: standard
+approvals:
+  tier2_external_comms: require_human
+  tier3_destructive: block
+sandbox:
+  policy_preset: personal_automation_v1
+evals:
+  suite: personal_automation_v1
+  publish_threshold: 0.85
+metadata:
+  owner: example
