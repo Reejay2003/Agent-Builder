@@ -40,7 +40,8 @@ Status values: `not started` / `in progress` / `blocked` / `done` / `partial`. T
 Phase 0 has enough evidence to start Phase 1 ([PLAN section 13](PLAN.md)). Suggested order, each small and independent:
 | # | Task | Output | Owner | Status |
 |---|---|---|---|---|
-| P1.1 | **AgentSpec** JSON Schema + typed models | `packages/agent-spec/` (spec_version 1, validated examples: personal_automation, support) | (unclaimed) | not started |
+| P1.0 | **SDK skeleton** (`packages/sdk/`: pyproject, ruff, mypy, pytest, pre-commit, CI) and `FakeModel` test harness ([PLAN 16](PLAN.md)) | `packages/sdk/`, `.github/workflows/` | (unclaimed) | not started |
+| P1.1 | **AgentSpec** JSON Schema + typed models (becomes `agentbuilder.spec`) | `packages/agent-spec/` (spec_version 1, validated examples: personal_automation, support) | (unclaimed) | not started |
 | P1.2 | **Compiler A/B**: AgentSpec -> NAT workflow + `FabricConfig` (agent mode from `model.agent_mode`, tools from manifests, Relay on) | `services/runner/compiler/`, golden-file tests, `make test` | (unclaimed) | not started |
 | P1.3 | **Runner service**: run a compiled spec through Fabric, return result + ATIF | `services/runner/` FastAPI endpoint `POST /runs` | (unclaimed) | not started |
 | P1.4 | **Tool store v0**: manifests for demo + Gmail/Calendar tools, MCP gateway stub | `packages/tool-manifests/`, `services/mcp-gateway/` | (unclaimed) | not started |
@@ -75,6 +76,7 @@ Cleanup already done: adapter moved to `services/runner/nat_adapter/` (own READM
 | 2026-10-10 | **Stay on a light/free LLM for now** (default `nvidia/nemotron-3-super-120b-a12b:free` via OpenRouter) | Cost; accept weaker agents and expect flaky runs until S14 | `.env.example` |
 | 2026-10-11 | Project licence is **Apache-2.0** (there is no "Apache 2.1"); `LICENSE` is the unmodified official text from apache.org | Matches the NVIDIA stack, includes a patent grant, friendly to contributors | `LICENSE` |
 | 2026-10-11 | Development default model is **gpt-4.1-mini** via OpenAI (paid, cents per test run); free OpenRouter model is the zero-cost fallback. Supersedes "stay on a free LLM" for day-to-day work | Measured: gpt-4.1-mini is 15/15 across NAT and Fabric; free and nano models are flaky with ReAct | `.env.example`, S14 |
+| 2026-10-12 | **The project becomes an SDK**: `agentbuilder` core library (Python first) with the wizard, server and CLI as clients; adapter ships as `agentbuilder-nat`. Assumptions (audience, names, languages, API shape) await owner confirmation | The AgentSpec contract already separates definition from execution; an SDK makes it usable by developers and by the wizard | PLAN 16 |
 | 2026-10-12 | **We own our NAT adapter** (patched copy of NVIDIA's Apache-2.0 reference, now in `services/runner/nat_adapter/`): supports ReAct and tool calling, Relay activation with typed LLM/tool events, tool-name repair; later repair steps go here | Upstream has no maintained NAT adapter and the reference is ReAct-only | `spikes/s2-fabric-nat/`, PLAN 4.1 |
 | 2026-10-11 | **Native tool calling is the default agent mode** (confirmed by S14 data); ReAct is the fallback | gpt-4.1-nano: tool calling 5/5 vs ReAct 3/5 | PLAN 4.3 |
 | 2026-10-10 | Secrets only in git-ignored `.env`; the sandbox gets a placeholder key through an OpenShell provider | The key must never enter the agent's environment | `spikes/s3-openshell/` |
@@ -111,6 +113,7 @@ Cleanup already done: adapter moved to `services/runner/nat_adapter/` (own READM
 - Relay licence and version compatibility with Switchyard's plugin (needs Relay 0.8 to under 1.0). (S4, S7)
 
 ## Changelog (newest first, one line each)
+- 2026-10-12: PLAN v10: SDK plan (section 16); Phase 1 tracker gets P1.0 SDK skeleton.
 - 2026-10-12: Added per-phase completion sections at the end (Phase 0 completed, Phase 1 to 8 placeholders).
 - 2026-10-12: Phase 1 cleanup: adapter moved to `services/runner/nat_adapter/`, README/paths updated, Phase 1 kickoff list added.
 - 2026-10-12: Typed Relay events (LLM + tool steps with tokens) for both agent types; tool-name repair built (0 triggers in A/B); `make test` added.

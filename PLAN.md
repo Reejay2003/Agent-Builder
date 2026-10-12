@@ -1,4 +1,4 @@
-# Agent Builder Platform: Master Plan (v9)
+# Agent Builder Platform: Master Plan (v10)
 
 Last updated: 2026-10-08. Personal open-source project on GitHub. No revenue, no funding, so **everything must be free or open source** (section 3).
 
@@ -8,6 +8,11 @@ Tags used for facts:
 - **[memory]**: from my background knowledge, not checked this session; confirm before adopting
 
 ## 0. Changes
+
+### v10 (2026-10-12)
+1. **The project becomes an SDK.** New section 16: the SDK is the core library (Python first); the wizard, server and CLI are clients of it; the AgentSpec stays the one stable contract. Two distributions (`agentbuilder` core, framework-agnostic; `agentbuilder-nat` runner adapter with the pinned NVIDIA stack), versions 0.1 to 1.0 mapped to the roadmap phases, a 10-task 0.1 backlog, a migration table for what exists today, risks, and six open decisions for the owner (16.10).
+2. **Proposal:** pull evals, the model probe and the repair ladder forward to SDK 0.2 (prototypes exist).
+3. Repo layout (section 14) gains `packages/sdk/` and `packages/sdk-nat/`; reference links are now section 17.
 
 ### v9 (2026-10-12, evidence from Phase 0 spikes S2 to S4 and S14)
 1. **Agent mode confirmed by data:** a 480-run suite (3 OpenAI models x NAT/Fabric x ReAct/tool calling x 20 varied tasks) showed tool calling is never worse than ReAct and clearly better only on the weakest model (gpt-4.1-nano: 97.5% vs 85 to 92.5%); Fabric matches plain NAT. `tool_calling` stays the default, ReAct the fallback (4.3). N=40 per cell; treat gaps as directional.
@@ -614,7 +619,9 @@ agent-platform/
   services/connectors/       # database, CSV/Sheets, OpenAPI, BYO-MCP connectors; semantic models; generated tools (Phase 3)
   services/channels/         # web chat widget API, email poller, webhook receiver, scheduler (Phase 3)
   services/voice/            # Phase 7
-  packages/agent-spec/       # JSON Schema + typed models (the stable contract)
+  packages/sdk/              # `agentbuilder` core SDK: spec, models, tools, compile, runtime interface, evals, observe, CLI (section 16)
+  packages/sdk-nat/          # `agentbuilder-nat`: NAT/Fabric runner adapter (moves from services/runner/nat_adapter)
+  packages/agent-spec/       # JSON Schema + typed models (the stable contract; becomes agentbuilder.spec)
   packages/knowledge-schemas/ # profile schemas (candidate, business, FAQ card) and chunk metadata
   packages/semantic-models/  # entity mapping schemas per template (customer, order, ticket, candidate, requisition, booking)
   packages/connector-packs/  # curated app connectors (Zammad, FreeScout, Twenty, OpenCATS, Nextcloud)
@@ -656,7 +663,146 @@ Write ADRs for: NAT-as-agent-layer, OpenShell tenancy model, telemetry source of
 18. **Connector sprawl.** Every app wants its own connector. Mitigation: four generic connectors first (database, CSV/Sheets, OpenAPI, bring-your-own MCP); app packs only when a template needs one, and built on the OpenAPI connector.
 19. **Inbound channels as an attack surface** (unauthenticated webhooks, anonymous chat). Mitigation: signed webhooks with replay protection, rate limits, anonymous users limited to Tier 0, and every run tagged with its channel identity.
 
-## 16. Reference links
+## 16. SDK plan (v10)
+
+### 16.1 What the SDK is
+**Assumption, to be confirmed in 16.10:** the SDK is the **core product library**. The wizard, the server and the CLI are *clients* of it. One stable contract (the AgentSpec, section 5) serves both audiences: developers who write agents in Python, and non-technical users who build the same agents through the wizard.
+
+One sentence: *define an agent once (Python or a spec file), then validate, compile, test, evaluate and run it, locally or in a sandbox, with safe defaults and a full trajectory for every run.*
+
+**Not goals:** a new agent framework (we sit on NAT, Fabric and OpenShell), a hosted service, a model gateway, or a replacement for the NVIDIA components. Each of those stays behind an adapter we own (section 1.2 rule: the AgentSpec is the stable layer).
+
+### 16.2 Design principles
+1. **Spec-first, Python-equivalent.** Every Python `Agent` serialises to an AgentSpec and back with no loss (tested round trip). The spec is the source of truth for compilers, evals and deployment.
+2. **Deterministic compile.** The same spec always yields byte-identical configs (golden-file tests), so diffs are reviewable and bugs reproducible.
+3. **Secrets by reference.** Specs and logs never contain keys; keys are read from the environment or a secret store at run time.
+4. **Local-first and free by default.** Works on a laptop with Docker optional; paid or GPU-gated pieces are optional extras (section 3).
+5. **Pluggable adapters.** Runners, tools, connectors, retrieval engines and scorers register through entry points. NAT/Fabric is the first runner, not the only possible one.
+6. **Async core, sync wrappers.** `await agent.arun(...)` and `agent.run(...)`.
+7. **Typed and testable.** Full type hints, `py.typed`, an offline `FakeModel` so CI never needs an LLM key or spends money.
+8. **Safe by default.** Risk tiers, approval hooks and the sandbox runner are on unless explicitly relaxed; the platform floor cannot be turned off.
+9. **Observable by default.** Every run returns a trajectory (ATIF) with tokens, tool calls and results; tool use is provable from tool-side logs, not from answer text (lesson from S14).
+10. **Small, honest public API.** `0.x` makes no stability promise; anything unsettled lives in `agentbuilder.experimental`; 1.0 freezes the surface.
+
+### 16.3 Packages and modules
+Two distributions in this monorepo, so the core stays framework-agnostic and the churn of 0.x NVIDIA releases is isolated:
+
+| Distribution | Contents | Depends on |
+|---|---|---|
+| `agentbuilder` (core) | spec, models, tools, compile, runtime interface, evals, observe, repair, CLI | pydantic, PyYAML, httpx, mcp; **no NVIDIA packages** |
+| `agentbuilder-nat` (runner adapter) | our NAT adapter for Fabric: ReAct and tool calling, Relay typed events, repair hook, plus pinned NAT 1.9, Fabric 0.4, nemo-relay | `agentbuilder`, NVIDIA stack |
+| extras | `agentbuilder[nat]` (installs the adapter), `[sandbox]` (OpenShell client), `[eval]`, `[knowledge]`, `[server]`, `[voice]`, `[all]` | |
+
+Import name `agentbuilder`. **PyPI name:** `agentbuilder` returned 404 on 2026-10-12 (appears free) [verified]; `agent-builder` is taken by an unrelated package. Reserve early; avoid "NVIDIA" or "NeMo" in the name.
+
+| Module | Responsibility | What exists today |
+|---|---|---|
+| `agentbuilder.spec` | AgentSpec models (pydantic), JSON Schema export, validation, `spec_version` migration, templates | design in section 5; P1.1 |
+| `agentbuilder.models` | `Model.openai / openrouter / ollama / custom`, BYOK, capability table, model probe | S14 data, section 4.3, 4.4.1 |
+| `agentbuilder.tools` | `@tool` decorator, manifests, risk tiers, MCP server and client helpers, registry | `packages/mcp-tools`, `packages/tool-manifests` |
+| `agentbuilder.compile` | compilers A to F (NAT config, Fabric config, sandbox policy, OPA, knowledge, integrations) | section 4.2; A and B first |
+| `agentbuilder.runtime` | `Runner` interface, `LocalRunner`, `SandboxRunner`, sessions, streaming, `RunResult` | `services/runner/nat_adapter`, S3 |
+| `agentbuilder.observe` | trajectory (ATIF) reader, Relay and NAT-native adapters, cost and token totals | S4 |
+| `agentbuilder.evals` | cases, suites, deterministic and trajectory scorers, eval gate, `FakeModel` | `spikes/s14-tool-calling/tasks.py`, `run_suite.py`, S4 eval |
+| `agentbuilder.repair` | repair ladder steps (section 4.4.2) | `nat/repair.py` |
+| `agentbuilder.knowledge`, `.integrations` | retrieval engine interface, connectors, channels | later phases |
+| `agentbuilder.cli` (`ab`) | `init`, `validate`, `compile`, `run`, `eval`, `doctor`, `probe-model` | `make` targets, `scripts/check_env.sh` |
+| `agentbuilder-server` (own distribution, later) | FastAPI control plane for the wizard; consumes only the public SDK API | PLAN section 4 control plane |
+
+### 16.4 Public API sketch (illustrative, not final)
+```python
+from agentbuilder import Agent, Model, tool
+
+@tool(risk=0, description="Add two numbers")      # generates the manifest: no side effects, no network, tier 0
+def add_numbers(a: float, b: float) -> float:
+    return a + b
+
+agent = Agent(
+    name="calc-helper",
+    model=Model.openai("gpt-4.1-mini"),            # key read from env or a secret ref, never stored in the spec
+    instructions="Use the tools for arithmetic.",
+    tools=[add_numbers],
+    mode="auto",                                    # tool_calling | react | auto (chosen from model capabilities)
+)
+
+result = agent.run("What is 17.5 plus 25?")        # sync; `await agent.arun(...)` in async code
+result.text, result.usage, result.trajectory        # trajectory = ATIF steps: model calls, tool calls, results, tokens
+
+report = agent.evaluate(cases)                      # deterministic + trajectory scoring; tool use proven by tool logs
+agent.save("calc.agent.yaml")                       # the AgentSpec, the stable contract
+agent = Agent.load("calc.agent.yaml")
+```
+CLI: `ab init`, `ab validate calc.agent.yaml`, `ab compile`, `ab run`, `ab eval`, `ab doctor`, `ab probe-model`.
+Sandbox and approvals (v0.3): `Agent(..., sandbox="openshell", approve=callback)`; Tier 2 actions call `approve` with the exact payload, Tier 3 is blocked by default.
+
+### 16.5 Contracts
+- **Spec to runtime:** `Compiler.compile(spec) -> CompiledAgent` (pure, deterministic); `Runner.run(compiled, input, session) -> RunResult`. Runners register under the entry-point group `agentbuilder.runners`; `agentbuilder-nat` registers `nat-fabric`.
+- **Tools:** MCP plus a manifest (`id, description_plain, scopes, side_effects, risk_tier, creds_required, egress_hosts, fs_paths, rate_limits, mock_response`, section 6). A decorated Python function becomes an MCP stdio tool automatically.
+- **Telemetry:** the trajectory format is ATIF v1.7; sources are NAT-native or Relay, both readable by `agentbuilder.observe`.
+- **Versioning:** `spec_version` is separate from the package version; old specs load through migrations; the SDK refuses specs from a newer major `spec_version`.
+
+### 16.6 Engineering standards
+- **Quality gates:** `ruff`, `mypy --strict` on the public API, `pytest`. Three test tiers: offline unit tests with `FakeModel` (the default CI tier, zero cost), golden-file tests for every compiler, and `live` tests that need a real key and run only on demand or nightly.
+- **CI:** GitHub Actions (free for public repos), matrix Python 3.11 to 3.13 on macOS and Linux; a clean-install job (`pip install agentbuilder[nat]` in an empty venv, run the quickstart); a nightly **compatibility matrix** of SDK against the pinned NAT, Fabric and Relay and the newest upstream releases, so upstream drift is caught before users see it.
+- **Supply chain:** pinned constraints file for NVIDIA packages, `pip-audit` in CI, secret scan in pre-commit, PyPI trusted publishing, SBOM on release.
+- **Docs:** mkdocs-material site with runnable examples; `examples/` (calculator, email triage, support-bot skeleton) each executed in CI against `FakeModel`.
+- **Releases:** semantic versioning, `CHANGELOG.md`, `0.1.0a1` to TestPyPI first, deprecations announced one minor release ahead once past 1.0.
+- **Platforms:** macOS (Apple Silicon) and Linux supported; Windows unverified (OpenShell supports Windows only experimentally).
+
+### 16.7 Versions mapped to the roadmap
+| SDK version | Roadmap phase | Contents | Exit criteria |
+|---|---|---|---|
+| **0.1** | Phase 1 | spec + JSON Schema, `models` (BYOK, seed capability table), `tools` + manifests, compilers A and B, `LocalRunner` (Fabric + NAT, both agent modes), trajectory reader, `FakeModel`, CLI (`validate`, `compile`, `run`, `doctor`), 3 examples, CI, docs skeleton | Clean venv: `pip install agentbuilder[nat]`, quickstart runs offline with `FakeModel` and online with a real model; compiler golden tests and spec round-trip tests pass; adapter tests pass |
+| **0.2** | pulled forward from Phase 5 (proposal) | `evals` (cases, scorers, eval gate), model probe, repair ladder, `ab eval`, `ab probe-model`. Prototypes already exist (S14, S4) | Eval suite runs in CI against `FakeModel`; a real-model report reproduces the S14 numbers within noise |
+| **0.3** | Phase 2 | `SandboxRunner` (OpenShell), risk tiers, approval hooks, compilers C and D (sandbox policy, OPA, guardrails) | Allowed and denied egress verified end to end through the SDK; Tier 2 blocked without approval |
+| **0.4** | Phase 3 | `integrations` (database, CSV/Sheets, OpenAPI), channels, record viewer data model, compiler F | Connector tests on snapshot data, including allow-list escape attempts |
+| **0.5** | Phase 4 | `knowledge` (`RetrievalEngine`, `pgvector_lite`, optional NeMo Retriever), compiler E | RAG golden-set metrics; tenant isolation tests |
+| **0.6** | Phase 6 | `agentbuilder.templates` library (support, recruiting, research, ops, sales) | Each template passes its eval gate on a stated model tier |
+| **0.7** | Phase 7 | `agentbuilder[voice]` | Voice latency and guardrail evals |
+| **1.0** | Phase 8 | API freeze, docs complete, compatibility matrix green | Public API unchanged across two consecutive minor releases; at least three external users have built an agent from the docs alone |
+
+### 16.8 Migrating what exists today
+| Today | Becomes | Work |
+|---|---|---|
+| `services/runner/nat_adapter/` | `agentbuilder-nat` distribution (`runtime/nat`) | add `pyproject.toml`, entry point, keep NVIDIA licence notices, wrap with the `Runner` interface |
+| `packages/mcp-tools/`, `packages/tool-manifests/` | `agentbuilder.tools` examples and test helpers; `@tool` generates the manifest and server | design decorator and manifest generation |
+| `spikes/s14-tool-calling/tasks.py`, `run_suite.py`, `run_matrix.py` | `agentbuilder.evals` (task format, parallel runner, per-run tool logs) | generalise: tasks as data, scorers pluggable |
+| `spikes/s4-relay-eval/summarize.py`, NAT eval configs | `agentbuilder.observe` and `evals.scorers` | ATIF reader, trajectory scorer wrapper |
+| `Makefile` targets, `scripts/check_env.sh` | `ab doctor` and `ab run/eval` (Makefile stays for repo tasks) | port checks |
+| `agents/*/workflow*.yml` | `examples/` and compiler golden fixtures | convert to AgentSpecs |
+| `requirements.txt` / `.lock` | `pyproject.toml` extras and a constraints file | keep the lock for the dev environment |
+
+### 16.9 Risks
+1. **Upstream churn** (NAT, Fabric, Relay are 0.x and change). Isolate in `agentbuilder-nat`, pin, nightly compatibility matrix, keep the core free of NVIDIA imports.
+2. **API churn before there are users.** Keep the public surface small, say so in the docs, put unsettled things in `experimental`.
+3. **Scope creep** (SDK, wizard, server at once). The SDK ships first; the server and wizard may use only its public API.
+4. **Name clash or trademark trouble.** Verify before the first upload; no NVIDIA or NeMo in the name.
+5. **Security:** the SDK runs tools and handles keys. Secrets by reference, `yaml.safe_load` only, no `eval` of spec content, sandbox runner for untrusted tools, an explicit threat model before 0.3.
+6. **Maintainer capacity** for issues and releases. Automate releases and compatibility checks; label good-first-issues; keep `COMPLETED.md` current.
+7. **Licence mix:** the SDK is Apache-2.0; the adapter contains modified NVIDIA Apache-2.0 files, which keep their notices and a `NOTICE` entry.
+8. **Hidden dependency on GPU or paid services.** Optional extras only; the default install and CI never need either.
+
+### 16.10 Open decisions (owner to answer)
+1. **Audience and relationship to the wizard:** developers first, wizard built on the same SDK (assumed). Or a different intent?
+2. **Names:** distribution `agentbuilder`, import `agentbuilder`, CLI `ab`, adapter `agentbuilder-nat`. Acceptable, or another name?
+3. **Languages:** Python only through 1.0 (assumed). Fabric also has a TypeScript contract; a TypeScript SDK would be a separate later project.
+4. **Pull evals, probe and repair forward to 0.2?** Proposed, because prototypes exist and they are what makes weak and free models usable.
+5. **API shape:** `Agent` as the builder object and `AgentSpec` as pure data (assumed), async core with sync wrappers.
+6. **Where it lives:** `packages/sdk/` and `packages/sdk-nat/` in this monorepo (assumed), published from CI.
+
+### 16.11 First backlog (SDK 0.1), mapped to the Phase 1 tracker in COMPLETED.md
+1. **SDK-1** package skeleton, `pyproject.toml`, ruff, mypy, pytest, pre-commit, GitHub Actions CI. (new, P1.0)
+2. **SDK-2** `spec` models, JSON Schema export, round-trip and migration tests, two example specs. (P1.1)
+3. **SDK-3** `FakeModel` and a scripted-tool-call test harness (offline, free). (new)
+4. **SDK-4** `@tool` decorator, manifest generation, MCP stdio server wrapper. (P1.4)
+5. **SDK-5** `models`: `Model.*` constructors, env and secret-ref key handling, seed capability table from S14. (P1.5 part)
+6. **SDK-6** compilers A and B with golden-file tests. (P1.2)
+7. **SDK-7** `LocalRunner` over the NAT adapter, packaged as `agentbuilder-nat`. (P1.3)
+8. **SDK-8** `RunResult` and ATIF trajectory reader with token and tool-call totals. (P1.3)
+9. **SDK-9** CLI: `validate`, `compile`, `run`, `doctor`. (new)
+10. **SDK-10** three examples, docs skeleton, clean-install CI job, `0.1.0a1` to TestPyPI.
+
+## 17. Reference links
 - NeMo Agent Toolkit: https://github.com/NVIDIA/NeMo-Agent-Toolkit
 - NeMo Fabric overview: https://docs.nvidia.com/nemo/fabric/about-nemo-fabric/overview
 - NeMo Fabric adapter contract (NAT as shared framework adapter): https://docs.nvidia.com/nemo/fabric/adapter-contract/overview
