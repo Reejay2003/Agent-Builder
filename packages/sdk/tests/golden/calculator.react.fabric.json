@@ -1,0 +1,55 @@
+{
+  "schema_version": "fabric.agent/v1alpha1",
+  "metadata": {
+    "name": "calc-helper",
+    "description": "Adds numbers and counts words using tools, never from memory."
+  },
+  "workflow": {
+    "target_id": "agent-builder.simple-agent",
+    "settings": {
+      "llm_name": "default",
+      "parse_agent_response_max_retries": 3
+    }
+  },
+  "discovery": {
+    "local_paths": [
+      "/adapter"
+    ]
+  },
+  "runtime": {
+    "input_schema": "text",
+    "output_schema": "message"
+  },
+  "models": {
+    "default": {
+      "provider": "openai",
+      "model": "gpt-4.1-mini",
+      "api_key_env": "LLM_API_KEY",
+      "base_url": "https://api.openai.com/v1",
+      "temperature": 0.0
+    }
+  },
+  "instructions": {
+    "system": {
+      "content": "A careful assistant.\n\nRules:\n- Use the tools for any arithmetic or word counting.\n- If a question needs no tool, answer directly.",
+      "mode": "append"
+    }
+  },
+  "mcp": {
+    "servers": {
+      "demo": {
+        "transport": "stdio",
+        "url": "python",
+        "args": [
+          "packages/mcp-tools/demo_server.py"
+        ],
+        "exposure": "harness_native",
+        "allowed_tools": [
+          "add_numbers",
+          "count_words",
+          "get_current_time"
+        ]
+      }
+    }
+  }
+}

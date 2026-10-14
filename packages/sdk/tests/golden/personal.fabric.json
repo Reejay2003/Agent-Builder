@@ -1,0 +1,116 @@
+{
+  "schema_version": "fabric.agent/v1alpha1",
+  "metadata": {
+    "name": "personal-assistant",
+    "description": "Triages email, manages the calendar and sends a daily brief. Drafts only; a human sends."
+  },
+  "workflow": {
+    "target_id": "agent-builder.simple-agent-toolcalling",
+    "settings": {
+      "llm_name": "default"
+    }
+  },
+  "discovery": {
+    "local_paths": [
+      "/adapter"
+    ]
+  },
+  "runtime": {
+    "input_schema": "text",
+    "output_schema": "message",
+    "artifacts": "/out/relay/fabric-artifacts"
+  },
+  "models": {
+    "default": {
+      "provider": "openai",
+      "model": "nvidia/nemotron-3-super-120b-a12b:free",
+      "api_key_env": "AGENTBUILDER_SECRET_LLM_PRIMARY",
+      "base_url": "https://openrouter.ai/api/v1"
+    }
+  },
+  "instructions": {
+    "system": {
+      "content": "A concise, careful personal assistant.\n\nRules:\n- Never send email; create drafts for the user to review.\n- Show the exact payload before any action that contacts another person.",
+      "mode": "append"
+    }
+  },
+  "mcp": {
+    "servers": {
+      "gmail": {
+        "transport": "stdio",
+        "url": "python",
+        "args": [
+          "gmail_server.py"
+        ],
+        "exposure": "harness_native",
+        "allowed_tools": [
+          "read",
+          "send_draft"
+        ]
+      },
+      "calendar": {
+        "transport": "stdio",
+        "url": "python",
+        "args": [
+          "calendar_server.py"
+        ],
+        "exposure": "harness_native",
+        "allowed_tools": [
+          "list_events",
+          "create_event"
+        ]
+      },
+      "sheets": {
+        "transport": "stdio",
+        "url": "python",
+        "args": [
+          "sheets_server.py"
+        ],
+        "exposure": "harness_native",
+        "allowed_tools": [
+          "read"
+        ]
+      },
+      "web": {
+        "transport": "stdio",
+        "url": "python",
+        "args": [
+          "web_server.py"
+        ],
+        "exposure": "harness_native",
+        "allowed_tools": [
+          "search"
+        ]
+      }
+    }
+  },
+  "telemetry": {
+    "providers": {
+      "relay": {}
+    }
+  },
+  "relay": {
+    "project": "personal-assistant",
+    "output_dir": "/out/relay",
+    "observability": {
+      "version": 3,
+      "atof": {
+        "enabled": true,
+        "sinks": [
+          {
+            "type": "file",
+            "output_directory": "/out/relay",
+            "filename": "events.atof.jsonl"
+          }
+        ]
+      },
+      "atif": {
+        "enabled": true,
+        "agent_name": "personal-assistant",
+        "model_name": "nvidia/nemotron-3-super-120b-a12b:free",
+        "output_directory": "/out/relay"
+      },
+      "enable_full_payloads": true
+    }
+  }
+}

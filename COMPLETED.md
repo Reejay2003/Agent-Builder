@@ -43,10 +43,10 @@ Phase 0 has enough evidence to start Phase 1 ([PLAN section 13](PLAN.md)). Sugge
 |---|---|---|---|---|
 | P1.0 | **SDK skeleton** (`packages/sdk/`: pyproject, ruff, mypy, pytest, pre-commit, CI) and `FakeModel` test harness ([PLAN 16](PLAN.md)) | `packages/sdk/`, `.github/workflows/` | owner + Claude | **done 2026-10-12** (CI workflow written, not yet run: needs a push) |
 | P1.1 | **AgentSpec** JSON Schema + typed models (becomes `agentbuilder.spec`) | `packages/sdk/src/agentbuilder/spec/`, 2 example specs (support example still to add) | owner + Claude | **done 2026-10-12** |
-| P1.2 | **Compiler A/B**: AgentSpec -> NAT workflow + `FabricConfig` (agent mode from `model.agent_mode`, tools from manifests, Relay on) | `services/runner/compiler/`, golden-file tests, `make test` | (unclaimed) | not started |
+| P1.2 | **Compiler A/B**: AgentSpec -> NAT workflow + `FabricConfig` (agent mode from `model.agent_mode`, tools from manifests, Relay on) | `packages/sdk/src/agentbuilder/compile/`, golden-file tests | owner + Claude | **A and B working 2026-10-14** (compile + run verified offline); remaining: sandbox policy (C) in week 3 |
 | P1.3 | **Runner service**: run a compiled spec through Fabric, return result + ATIF | `services/runner/` FastAPI endpoint `POST /runs` | (unclaimed) | not started |
-| P1.4 | **Tool store v0**: manifests for demo + Gmail/Calendar tools, MCP gateway stub | `packages/tool-manifests/`, `services/mcp-gateway/` | (unclaimed) | not started |
-| P1.5 | **Model check (probe)** + capability table | `packages/model-capabilities/`, `services/control` endpoint ([PLAN 4.4.1](PLAN.md)) | (unclaimed) | not started |
+| P1.4 | **Tool store v0**: manifests for demo + Gmail/Calendar tools, MCP gateway stub | `packages/sdk/src/agentbuilder/tools/`, `packages/tool-manifests/`, `services/mcp-gateway/` | owner + Claude | **partial 2026-10-14**: `@tool`, manifests, MCP wrapper, catalog and demo manifest done; real Gmail/Calendar tools and the gateway stub remain |
+| P1.5 | **Model check (probe)** + capability table | `packages/sdk/src/agentbuilder/models/`, `services/control` endpoint ([PLAN 4.4.1](PLAN.md)) | owner + Claude | **partial 2026-10-14**: constructors, credentials, capability table (seeded from S14) done; the live probe remains |
 | P1.6 | **Control service** skeleton: FastAPI + Postgres (AgentSpec versions, runs) | `services/control/` | (unclaimed) | not started |
 | P1.7 | **Wizard** shell (Next.js): BYOK, template, tool basket, test run with trace view | `apps/web/` | (unclaimed) | not started |
 Cleanup already done: adapter moved to `services/runner/nat_adapter/` (own README, tests, licence file); `make test`; eval deps pinned; harnesses updated; all runs re-verified after the move.
@@ -108,6 +108,7 @@ Cleanup already done: adapter moved to `services/runner/nat_adapter/` (own READM
 - **Do not judge an agent run by its final text:** one "success" contained a made-up date. S14's harness checks the real time and the MCP server's own call log.
 - **OpenShell MicroVM driver on macOS needs three things:** `brew install e2fsprogs`, `compute_driver = "vm"` in the Homebrew `gateway.toml`, and `DOCKER_HOST=unix://$HOME/.docker/run/docker.sock` in `gateway.env` (else it tries Docker Hub for local images). `spikes/s3-openshell/switch_driver.sh docker|vm` does it and keeps backups. First VM start of an image takes about 40 s.
 - **zsh does not word-split unquoted variables:** `flag="--repair tool_names"; cmd $flag` passes ONE argument. Use arrays or write the flag out. (Bit us twice.)
+- **Fabric picks the adapter host's Python from `ADAPTER_PYTHON` (or `VIRTUAL_ENV`), NOT from PATH.** Without either, the host can start under another interpreter and fail with "No module named nemo_fabric_adapters.common". Set `ADAPTER_PYTHON=$(which python)` (corrects the earlier PATH advice).
 - **Run the SDK checks from `packages/sdk/`** (`make sdk-check` does): ruff, mypy and pytest read `packages/sdk/pyproject.toml`.
 - **`--no-keep` OpenShell sandboxes** can keep their name for a few seconds ("already exists"); use a new name.
 
@@ -118,6 +119,7 @@ Cleanup already done: adapter moved to `services/runner/nat_adapter/` (own READM
 - Relay licence and version compatibility with Switchyard's plugin (needs Relay 0.8 to under 1.0). (S4, S7)
 
 ## Changelog (newest first, one line each)
+- 2026-10-14: SDK week 2: tools (`@tool`, manifests, MCP wrapper), models (BYOK, credentials, capability table), compilers A and B with goldens; compiled configs run on real NAT and Fabric offline; 119 offline + 6 NAT tests.
 - 2026-10-14: OpenShell switched to the MicroVM driver; egress compared with Docker (no leaks either way; VM adds isolation at about 10x start time and 8x memory).
 - 2026-10-12: SDK week 1 done: `packages/sdk/` skeleton + CI file, AgentSpec (models, schema, load/save, migrations), FakeModel and fake OpenAI server; 65 offline tests + 2 NAT integration tests.
 - 2026-10-12: PLAN v10: SDK plan (section 16); Phase 1 tracker gets P1.0 SDK skeleton.
@@ -164,6 +166,9 @@ One section per phase of the [PLAN roadmap](PLAN.md#13-roadmap-after-phase-0). W
 |---|---|---|---|
 | SDK-1 package skeleton (P1.0) | 2026-10-12 | `packages/sdk/pyproject.toml`, `make sdk-check`, `.github/workflows/sdk-ci.yml`, `.pre-commit-config.yaml`, `scripts/scan_secrets.py` | ruff, `mypy --strict`, pytest all green locally; wheel builds and installs into an empty venv with zero NVIDIA/LangChain imports. CI file written but unrun until pushed; pre-commit configured, not installed (`pre-commit install`) |
 | SDK-2 AgentSpec (P1.1) | 2026-10-12 | `agentbuilder/spec/` (models, io, migrate, schema), `agent-spec.schema.json`, `examples/specs/*.agent.yaml` | Strict (unknown fields rejected), frozen, credentials by reference only, key-shaped values rejected anywhere, tool shorthand, safe_load only, version migrations (none yet), committed JSON Schema checked by a test, lossless round trip (dict, YAML, JSON, file) |
+| SDK-4 tools (P1.4 part) | 2026-10-14 | `agentbuilder/tools/`, `packages/mcp-tools/demo_tools.py`, `packages/tool-manifests/demo_tools.manifest.json` (now generated from the SDK, kept in sync by a test) | `@tool` derives the input schema and manifest from type hints; risk tier cannot understate side effects; missing docstring, annotations, bad hosts and paths are errors; MCP wrapper writes an audit log and has a `--mock` mode that never runs the function |
+| SDK-5 models (P1.5 part) | 2026-10-14 | `agentbuilder/models/` | `Model.openai/openrouter/ollama/nvidia_hosted/custom`; `resolve_credential` refuses keys with whitespace inside (the mistake that bit us), `Secret` never prints, `redact()`; capability table seeded only from measured S14 results with a self-consistency test; `agent_mode: auto` resolves through it |
+| SDK-6 compilers A and B (P1.2) | 2026-10-14 | `agentbuilder/compile/`, `tests/golden/`, `tests/integration/test_compiled_agents_run.py` | One `CompiledAgent` feeds both emitters; no secret can reach output; least-privilege `include`/`allowed_tools`; tier-3 tools refused by default; unenforced approvals warned about; 6 golden files; **the compiled YAML runs on real NAT and the compiled Fabric config runs through our adapter, ReAct and tool calling, offline against the fake model** |
 | SDK-3 FakeModel (P1.0) | 2026-10-12 | `agentbuilder/testing/` (`FakeModel`, `FakeOpenAIServer`), `tests/integration/test_nat_against_fake_server.py` | Scripted offline model; OpenAI-compatible server (streaming + non-streaming). A real NAT tool-calling agent and a real ReAct agent (with the real MCP tool) both ran end to end against it with zero API calls. 65 offline tests + 2 NAT integration tests |
 
 ## Phase 2 completed: Safety (weeks 7 to 9)

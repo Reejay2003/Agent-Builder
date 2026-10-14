@@ -244,10 +244,11 @@ def _apply_system_instruction(
         return
 
     workflow = config["workflow"]
-    if not _is_react_agent(workflow):
+    # local patch: NAT's tool_calling_agent accepts additional_instructions too (checked against its config model)
+    if workflow.get("_type") not in {"react_agent", "tool_calling_agent"} and not _is_react_agent(workflow):
         raise _config_error(
             "nat_system_instruction_unsupported",
-            "instructions.system is supported only for a NeMo Agent Toolkit react_agent workflow",
+            "instructions.system is supported only for a NeMo Agent Toolkit react_agent or tool_calling_agent workflow",
             workflow_type=workflow.get("_type"),
         )
     if "additional_instructions" in workflow:

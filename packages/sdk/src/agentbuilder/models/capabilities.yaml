@@ -1,0 +1,44 @@
+# Seeded from our own measurements. Add rows only with evidence (spike, date, run counts).
+# modes: passed/runs over our 20-task suite (spikes/s14-tool-calling, 2026-10-12), 4 setups x 40 runs per model;
+# each mode pools its two setups (NAT and Fabric), so n = 80 per mode.
+models:
+  - provider: openai
+    model: gpt-4.1-mini
+    tool_calling: true
+    recommended_agent_mode: tool_calling
+    tier: strong
+    tier_source: measured
+    modes:
+      tool_calling: {passed: 80, runs: 80}
+      react: {passed: 80, runs: 80}
+    evidence: "S14 big suite, 2026-10-12, 20 varied tasks; 160/160 across all four setups"
+    notes: "Development default (decision 2026-10-11)."
+  - provider: openai
+    model: gpt-4o-mini
+    tool_calling: true
+    recommended_agent_mode: tool_calling
+    tier: standard
+    tier_source: measured
+    modes:
+      tool_calling: {passed: 78, runs: 80}
+      react: {passed: 76, runs: 80}
+    evidence: "S14 big suite, 2026-10-12; 154/160 across all four setups"
+  - provider: openai
+    model: gpt-4.1-nano
+    tool_calling: true
+    recommended_agent_mode: tool_calling
+    tier: standard
+    tier_source: measured
+    modes:
+      tool_calling: {passed: 78, runs: 80}
+      react: {passed: 71, runs: 80}
+    evidence: "S14 big suite, 2026-10-12; tool calling 97.5%, ReAct 88.75% (limited). Failures: tool calls where none were needed, loops, parse errors"
+    notes: "Prefer tool calling; ReAct is noticeably weaker on this model."
+  - provider: openrouter
+    model: nvidia/nemotron-3-super-120b-a12b:free
+    tool_calling: true
+    recommended_agent_mode: tool_calling
+    tier: limited
+    tier_source: manual
+    evidence: "S2b/S14 smoke only: tool calling worked; early ReAct runs failed about half the time (parse errors, empty replies)"
+    notes: "Free tier allows 50 requests a day and returns HTTP 429 after that; not suitable for evals."

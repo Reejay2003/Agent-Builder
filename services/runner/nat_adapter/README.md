@@ -5,6 +5,7 @@ Fabric ships no NAT adapter; NVIDIA publishes a source-only reference (`NVIDIA/N
 | Addition | File | Switch |
 |---|---|---|
 | Tool-calling agent (`fabric.agent.tool_calling` -> NAT `tool_calling_agent`) beside the original ReAct | `src/.../nat/adapter.py`, `targets/simple-agent-toolcalling.fabric-target.json` | choose the target |
+| `instructions.system` also for the tool-calling agent (NAT accepts `additional_instructions` on both) | `adapter.py` | on |
 | Relay activation per run (ATOF + ATIF, artifacts in the result) | `adapter.py` | needs 4 settings, see COMPLETED.md Gotchas |
 | Typed Relay LLM/tool events (model, tokens, tool args and results) | `src/.../nat/relay_events.py` | on whenever Relay is enabled; graph-node scopes opt-in `FABRIC_NAT_RELAY_GRAPH=1` |
 | Deterministic tool-name repair (PLAN 4.4.2 step 1), every repair reported in `output.repairs` | `src/.../nat/repair.py` | `FABRIC_NAT_REPAIR=tool_names` (off by default; benefit unproven) |
