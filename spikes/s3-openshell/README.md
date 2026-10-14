@@ -40,3 +40,25 @@ Gotchas found:
 - `--no-keep` sandboxes delete on exit and may keep their name for a few seconds ("already exists").
 - Pin `nemo-fabric==0.4.0`; installing with `--prerelease=allow` pulls 0.5.0b3.
 - Plan impact: per-tool egress via provider profiles (binaries + host) fits compiler C; secrets never enter the sandbox.
+
+## Part 3: Docker driver vs MicroVM driver, egress compared (2026-10-14)
+Probe: `egress_probe.py` runs inside a sandbox (policy `policy-egress.yaml`: only `/usr/bin/curl` may reach `openrouter.ai:443`) and tries 16 things that must be blocked plus 2 that must work: proxy bypass (`curl --noproxy`), IP literals, a non-allowed binary (python) to the allowed host, raw TCP, UDP DNS to 8.8.8.8 (exfil path), the Mac's own Postgres on 127.0.0.1, `host.docker.internal`, the OpenShell gateway port, the home-LAN gateway, the cloud-metadata IP, a neighbouring Docker container (172.18.0.2:5432) and Docker Desktop VM internals. Run: `./run_egress.sh <label>`; switch drivers with `./switch_driver.sh docker|vm`.
+
+| | Docker driver | MicroVM driver (libkrun) |
+|---|---|---|
+| Egress tests (16 must-block, 2 must-work) | **all pass, no leaks** | **all pass, no leaks** (identical results and error codes) |
+| Network interfaces the sandbox sees | `lo` plus 9 tunnel devices of the shared Docker Desktop kernel | **`lo` only** (no NIC; traffic leaves through the host supervisor) |
+| Kernel shared with other workloads | yes (Docker Desktop VM, same kernel as your Postgres container) | **no** (own VM kernel) |
+| Denial log format | `NET:OPEN DENIED /usr/bin/curl -> example.com:443 [transparent_tcp_policy_denied]` | identical (same supervisor code) |
+| First start (image export, disk format) | about 4 s | **about 40 s** (once per image) |
+| Warm start (create to exit) | about 0.6 s | about 6 s |
+| Memory per idle sandbox | about 24 MiB | about 180 MiB (VM process; 2 vCPU, 2 GiB configured) |
+
+**Reading:** the policy engine, not the driver, decides egress, so outcomes are the same. The MicroVM upgrade is **defense in depth**: if the policy is wrong or a kernel/container-escape bug exists, a VM has no network device to misuse and no shared kernel with neighbours. Cost: about 10x slower warm start and about 8x the memory. Suggested use: Docker driver for development and tests, MicroVM for untrusted tools and production-like runs; make the driver a setting in the SDK's `SandboxRunner`.
+Not tested: a deliberately over-permissive policy under each driver; GPU; many concurrent VMs; Linux hosts.
+
+Setup needed for the MicroVM driver on macOS (all done on this machine):
+1. `brew install e2fsprogs` (the driver builds ext4 disks; the gateway preflight names the missing tools).
+2. `compute_driver = "vm"` and a `[openshell.drivers.vm]` table in `$(brew --prefix)/var/openshell/gateway.toml`; the VM driver is opt-in and never auto-detected.
+3. `DOCKER_HOST=unix:///Users/<you>/.docker/run/docker.sock` in `$(brew --prefix)/var/openshell/gateway.env` so the VM driver can find local Docker Desktop images (macOS has no `/var/run/docker.sock` by default; without this it tries Docker Hub and fails with "Not authorized").
+4. `brew services restart openshell`. `openshell gateway info` should list `vm`. Docker Desktop must stay running.
