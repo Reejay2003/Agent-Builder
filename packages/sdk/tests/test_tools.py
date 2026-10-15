@@ -46,6 +46,60 @@ def test_input_schema_comes_from_type_hints():
     assert "title" not in s
 
 
+def test_description_is_the_first_paragraph_even_when_it_wraps():
+    @tool(namespace="x")
+    def search(q: str) -> list[str]:
+        """Search the web and return result
+        snippets for the given query.
+
+        Second paragraph is not shown.
+        """
+        return []
+
+    assert search.manifest.description_plain == "Search the web and return result snippets for the given query."
+
+
+def _load(tmp_path, name, source):
+    import importlib.util
+
+    f = tmp_path / f"{name}.py"
+    f.write_text(source)
+    spec = importlib.util.spec_from_file_location(name, f)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_works_in_files_that_use_future_annotations(tmp_path):
+    # With `from __future__ import annotations` every type hint is a string; it must still resolve.
+    module = _load(
+        tmp_path,
+        "future_tools",
+        "from __future__ import annotations\n"
+        "from datetime import datetime\n"
+        "from agentbuilder.tools import tool\n\n"
+        "@tool(namespace='x', description='Book a slot.')\n"
+        "def book(when: datetime, title: str, tags: list[str] | None = None) -> str:\n"
+        "    return title\n",
+    )
+    schema = module.book.input_schema
+    assert schema["properties"]["when"]["format"] == "date-time" and schema["required"] == ["when", "title"]
+    assert module.book.call({"when": "2026-01-02T03:04:05", "title": "t"}) == "t"
+
+
+def test_unresolvable_hints_give_a_clear_error(tmp_path):
+    with pytest.raises(ToolDefinitionError, match="cannot resolve a type hint"):
+        _load(
+            tmp_path,
+            "bad_tools",
+            "from __future__ import annotations\n"
+            "from agentbuilder.tools import tool\n\n"
+            "@tool(namespace='x', description='d')\n"
+            "def f(a: NotDefinedAnywhere) -> str:\n"
+            "    return ''\n",
+        )
+
+
 def test_tool_still_behaves_like_the_function():
     assert add_numbers(2, 3) == 5
     assert isinstance(add_numbers, Tool) and add_numbers.id == "demo.add_numbers"
@@ -143,6 +197,23 @@ def test_catalog_resolves_and_reports_unknown_ids():
         cat.resolve(["demo.add_numbers", "gmail.read"])
     with pytest.raises(ValueError, match="already"):
         cat.add_tools("other", [add_numbers], command="python")
+
+
+def test_clashing_names_are_refused_not_silently_dropped():
+    @tool(namespace="gmail", name="read", description="Read mail.")
+    def gmail_read(q: str) -> str:
+        return ""
+
+    @tool(namespace="sheets", name="read", description="Read a sheet.")
+    def sheets_read(q: str) -> str:
+        return ""
+
+    with pytest.raises(ValueError, match=r"MCP tool name 'read'.*gmail\.read and sheets\.read"):
+        ToolCatalog().add_tools("s", [gmail_read, sheets_read], command="python")  # same server, same short name
+    with pytest.raises(ValueError, match=r"tool id 'demo\.add_numbers'"):
+        ToolCatalog().add_tools("s", [add_numbers, add_numbers], command="python")  # same tool listed twice
+    # different servers may reuse a short name
+    ToolCatalog().add_tools("a", [gmail_read], command="python").add_tools("b", [sheets_read], command="python")
 
 
 def test_manifests_document_is_json_and_stable():

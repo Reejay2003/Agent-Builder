@@ -33,8 +33,6 @@ def to_fabric_config(
     model["base_url"] = c.model.base_url
     if c.model.temperature is not None:
         model["temperature"] = c.model.temperature
-    if c.model.max_tokens is not None:
-        model["max_tokens"] = c.model.max_tokens
 
     settings: dict[str, Any] = {"llm_name": "default"}
     if c.model.agent_mode == "react":

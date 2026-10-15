@@ -25,7 +25,6 @@ class CompiledModel(_Strict):
     base_url: str
     api_key_env: str | None = None
     temperature: float | None = None
-    max_tokens: int | None = None
     agent_mode: Literal["tool_calling", "react"]
 
 

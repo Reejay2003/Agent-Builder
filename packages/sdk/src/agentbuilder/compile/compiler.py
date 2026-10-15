@@ -23,6 +23,24 @@ def _instructions(persona: str, rules: list[str]) -> str:
     return "\n\n".join(parts)
 
 
+def _not_applied(spec: AgentSpec) -> list[str]:
+    """Spec fields that are accepted but change nothing yet (silence would look like protection)."""
+    m = spec.model
+    candidates = {
+        "guardrails.profile": spec.guardrails.profile != "standard",
+        "model.reliability": bool(m.reliability.model_dump(exclude_defaults=True)),
+        "model.routing": m.routing is not None,
+        "model.max_tokens": m.max_tokens is not None,
+        "sandbox.policy_preset": spec.sandbox.policy_preset is not None,
+        "evals.suite": spec.evals.suite is not None,
+        "knowledge": spec.knowledge is not None,
+        "integrations": bool(spec.integrations),
+        "channels": bool(spec.channels),
+        "voice": spec.voice is not None,
+    }
+    return [name for name, is_set in candidates.items() if is_set]
+
+
 def compile_agent(
     spec: AgentSpec, catalog: ToolCatalog, *, environ: Mapping[str, str] | None = None, parse_retries: int = 3
 ) -> CompiledAgent:
@@ -53,8 +71,14 @@ def compile_agent(
                 f"tool {t.id} is tier {tier} and needs human approval, but approval enforcement arrives in SDK 0.3: "
                 "it is NOT enforced yet"
             )
-        if tier >= 1 and spec.sandbox.policy_preset is None:
-            warnings.append(f"tool {t.id} can change things (tier {tier}) but no sandbox policy_preset is set")
+        if tier >= 1:
+            warnings.append(
+                f"tool {t.id} can change things (tier {tier}); sandbox policy arrives in SDK 0.3, "
+                "nothing restricts it yet"
+            )
+
+    if unapplied := _not_applied(spec):
+        warnings.append("these spec fields are accepted but NOT applied yet: " + ", ".join(unapplied))
 
     servers = catalog.servers_for(resolved)
     return CompiledAgent(
@@ -67,7 +91,6 @@ def compile_agent(
             base_url=model.base_url,
             api_key_env=key_env,
             temperature=model.temperature,
-            max_tokens=model.max_tokens,
             agent_mode=model.agent_mode,
         ),
         instructions=_instructions(spec.instructions.persona, spec.instructions.rules),

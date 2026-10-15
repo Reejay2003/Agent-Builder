@@ -17,16 +17,18 @@ from agentbuilder.models import Model
 from agentbuilder.tools import tool, ToolCatalog
 from agentbuilder.compile import compile_agent, to_nat_yaml, to_fabric_config
 
-@tool(namespace="demo", risk=0)                      # manifest + input schema come from the type hints
+
+@tool(namespace="demo", risk=0)  # manifest + input schema come from the type hints
 def add_numbers(a: float, b: float) -> float:
     """Add two numbers."""
     return a + b
 
+
 spec = AgentSpec(name="calc", model=Model.openai("gpt-4.1-mini"), tools=["demo.add_numbers"])
 catalog = ToolCatalog().add_tools("demo", [add_numbers], command="python", args=["my_server.py"])
-compiled = compile_agent(spec, catalog)              # no key needed; refuses unsafe specs (tier 3 tools by default)
-print(to_nat_yaml(compiled))                         # the workflow `nat run` executes
-mapping = to_fabric_config(compiled)                 # validates as a nemo_fabric.FabricConfig
+compiled = compile_agent(spec, catalog)  # no key needed; refuses unsafe specs (tier 3 tools by default)
+print(to_nat_yaml(compiled))  # the workflow `nat run` executes
+mapping = to_fabric_config(compiled)  # validates as a nemo_fabric.FabricConfig
 ```
 Serve tools over MCP with `agentbuilder.tools.mcp_server.main([add_numbers])` (needs `pip install "agentbuilder[mcp]"`; `--log PATH` writes an audit log, `--mock` returns each tool's mock response and never runs the function).
 

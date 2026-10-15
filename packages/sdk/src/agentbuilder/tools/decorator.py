@@ -14,7 +14,7 @@ from __future__ import annotations
 import inspect
 import json
 from collections.abc import Callable, Mapping, Sequence
-from typing import Any, TypeVar, overload
+from typing import Any, TypeVar, get_type_hints, overload
 
 from pydantic import BaseModel, ConfigDict, ValidationError, create_model
 
@@ -34,12 +34,18 @@ class ToolArgumentError(ValueError):
 
 def _input_model(fn: Callable[..., Any], name: str) -> type[BaseModel]:
     fields: dict[str, Any] = {}
+    try:
+        hints = get_type_hints(fn, include_extras=True)  # resolves string hints (`from __future__ import annotations`)
+    except NameError as exc:
+        raise ToolDefinitionError(
+            f"tool '{name}': cannot resolve a type hint ({exc}); define the type at module level"
+        ) from exc
     for p in inspect.signature(fn).parameters.values():
         if p.kind in (p.VAR_POSITIONAL, p.VAR_KEYWORD):
             raise ToolDefinitionError(f"tool '{name}': *args/**kwargs are not allowed; declare every parameter")
-        if p.annotation is inspect.Parameter.empty:
+        if p.name not in hints:
             raise ToolDefinitionError(f"tool '{name}': parameter '{p.name}' needs a type annotation")
-        fields[p.name] = (p.annotation, ... if p.default is inspect.Parameter.empty else p.default)
+        fields[p.name] = (hints[p.name], ... if p.default is inspect.Parameter.empty else p.default)
     return create_model(f"{name}_args", __config__=ConfigDict(extra="forbid"), **fields)
 
 
@@ -123,8 +129,7 @@ def tool(
 
     def build(func: Callable[..., Any]) -> Tool:
         mcp_name = name or func.__name__
-        text = description or (inspect.getdoc(func) or "").strip().splitlines()[0:1]
-        plain = text if isinstance(text, str) else (text[0] if text else "")
+        plain = description or " ".join((inspect.getdoc(func) or "").split("\n\n")[0].split())  # first paragraph
         if not plain.strip():
             raise ToolDefinitionError(
                 f"tool '{mcp_name}': add a plain-language description (docstring or description=); "

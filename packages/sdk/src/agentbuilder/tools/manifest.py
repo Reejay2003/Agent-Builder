@@ -4,6 +4,7 @@ approval policy are generated from (risk tier, network hosts, file paths). One m
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -74,6 +75,17 @@ class ToolManifest(_Strict):
                 f"risk_tier {self.risk_tier} is too low for side_effects '{self.side_effects}' (minimum {floor})"
             )
         return self
+
+
+def ensure_unique(manifests: Sequence[ToolManifest]) -> None:
+    """Two tools may not share an id or an MCP name: a server would silently keep only one of them."""
+    for field, label in (("id", "tool id"), ("mcp_name", "MCP tool name")):
+        seen: dict[str, str] = {}
+        for m in manifests:
+            value = getattr(m, field)
+            if value in seen:
+                raise ValueError(f"two tools share the {label} '{value}': {seen[value]} and {m.id}")
+            seen[value] = m.id
 
 
 def manifests_document(server: str, source: str, manifests: list[ToolManifest]) -> dict[str, Any]:

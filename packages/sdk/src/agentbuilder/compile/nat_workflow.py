@@ -28,8 +28,6 @@ def to_nat_workflow(c: CompiledAgent) -> dict[str, Any]:
         llm["api_key"] = "${" + c.model.api_key_env + "}"
     if c.model.temperature is not None:
         llm["temperature"] = c.model.temperature
-    if c.model.max_tokens is not None:
-        llm["max_tokens"] = c.model.max_tokens
     workflow: dict[str, Any] = {
         "_type": _WORKFLOW_TYPE[c.model.agent_mode],
         "tool_names": [s.name for s in c.servers],

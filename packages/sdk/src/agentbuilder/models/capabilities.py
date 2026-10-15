@@ -8,6 +8,7 @@ unsuitable.
 
 from __future__ import annotations
 
+import re
 from functools import lru_cache
 from importlib import resources
 from typing import Literal
@@ -62,13 +63,13 @@ def table() -> tuple[Capability, ...]:
 
 
 def lookup(provider: str, model: str) -> Capability | None:
-    """Exact match first, then the longest known id that prefixes `model` (so dated snapshots match their family)."""
+    """Exact match, or a dated snapshot of a known model (`gpt-4.1-mini-2025-04-14`). Other names stay unknown."""
     candidates = [c for c in table() if c.provider == provider]
     for c in candidates:
         if c.model == model:
             return c
-    prefixed = [c for c in candidates if model.startswith(c.model)]
-    return max(prefixed, key=lambda c: len(c.model)) if prefixed else None
+    dated = [c for c in candidates if re.fullmatch(rf"{re.escape(c.model)}-(\d{{4}}-\d{{2}}-\d{{2}}|\d{{8}})", model)]
+    return max(dated, key=lambda c: len(c.model)) if dated else None
 
 
 def resolve_agent_mode(spec: ModelSpec) -> Mode:

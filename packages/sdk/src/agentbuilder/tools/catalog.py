@@ -9,7 +9,7 @@ from collections.abc import Mapping, Sequence
 from pydantic import BaseModel, ConfigDict, Field
 
 from agentbuilder.tools.decorator import Tool
-from agentbuilder.tools.manifest import ToolManifest
+from agentbuilder.tools.manifest import ToolManifest, ensure_unique
 
 
 class _Strict(BaseModel):
@@ -41,6 +41,7 @@ class ToolCatalog:
     def add_server(self, server: McpServerBinding, manifests: Sequence[ToolManifest]) -> ToolCatalog:
         if server.name in self._servers:
             raise ValueError(f"server '{server.name}' is already in the catalog")
+        ensure_unique(manifests)
         for m in manifests:
             if m.id in self._tools:
                 raise ValueError(f"tool id '{m.id}' is already provided by server '{self._tools[m.id].server}'")

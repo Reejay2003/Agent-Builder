@@ -122,7 +122,9 @@ def test_capability_table_is_consistent_with_its_own_rules():
 def test_lookup_exact_prefix_and_unknown():
     assert lookup("openai", "gpt-4.1-mini").tier == "strong"
     assert lookup("openai", "gpt-4.1-mini-2025-04-14").model == "gpt-4.1-mini"  # dated snapshot -> family
-    assert lookup("openai", "gpt-4.1-nano-2025").model == "gpt-4.1-nano"  # longest prefix wins, not gpt-4.1-mini
+    assert lookup("openai", "gpt-4.1-nano-20250414").model == "gpt-4.1-nano"  # compact date form too
+    for guess in ("gpt-4.1-mini-experimental-preview", "gpt-4.1-minimal", "gpt-4.1-mini-2025"):
+        assert lookup("openai", guess) is None, guess  # a shared name prefix is a guess, not evidence
     assert lookup("openai", "totally-new") is None and lookup("ollama", "gpt-4.1-mini") is None
 
 

@@ -62,3 +62,26 @@ Setup needed for the MicroVM driver on macOS (all done on this machine):
 2. `compute_driver = "vm"` and a `[openshell.drivers.vm]` table in `$(brew --prefix)/var/openshell/gateway.toml`; the VM driver is opt-in and never auto-detected.
 3. `DOCKER_HOST=unix:///Users/<you>/.docker/run/docker.sock` in `$(brew --prefix)/var/openshell/gateway.env` so the VM driver can find local Docker Desktop images (macOS has no `/var/run/docker.sock` by default; without this it tries Docker Hub and fails with "Not authorized").
 4. `brew services restart openshell`. `openshell gateway info` should list `vm`. Docker Desktop must stay running.
+
+## Part 4: key passing on the MicroVM driver (2026-10-15)
+OpenShell's provider feature keeps API keys OUT of the sandbox. Verified end to end with your OpenAI key on the `vm` driver: `./key_passing_check.sh` (9 checks, exit code 0 only if all hold; `key_verdict.py` is the judge).
+
+Flow: the key is read from `.env` into the environment of ONE command (`openshell provider create --type openai --credential OPENAI_API_KEY`, never argv or a file) -> OpenShell's credential store -> sandbox created with `--provider openai-key` -> the agent sees only a placeholder (`openshell:...`, 56 characters) -> the supervisor proxy swaps in the real key on requests to `api.openai.com:443` from the allowed binaries only.
+
+| Check | Result |
+|---|---|
+| Sandbox env var is a placeholder, not the key | PASS |
+| Python and curl reach `api.openai.com` (HTTP 200, key injected by the proxy) | PASS |
+| The key is not sent to another host (`example.com`, curl and python) | PASS, blocked |
+| The real key appears nowhere the sandbox can read: env, `/proc/*/environ`, `/proc/*/cmdline`, home, `/sandbox` | PASS (host-side search of the dump) |
+| Sandbox network interfaces | `lo` only |
+| Sandbox WITHOUT the provider | no key variable; `api.openai.com` unreachable |
+| Real agent end to end: Fabric 0.4.0 + NAT 1.9.0 calculator agent inside a VM sandbox, real OpenAI call | `succeeded`, response `42`, agent process saw only the placeholder; about 15 s including VM start |
+| VM, not a container | `openshell gateway info` lists `vm`; no sandbox container in `docker ps -a`; the `openshell-driver-vm` process runs |
+
+**Design rules learned**
+- **Allowed-binary rules follow process ancestry.** `bash` alone is BLOCKED for `api.openai.com`, but `bash` started by the allowed `python` is OPEN. It can only reach the same allowed host and still only holds the placeholder, but it means an agent with a shell tool can use the allowed host through a child process. Keep shell tools out of agents that hold provider access, and allow only the runtime binary in the profile.
+- **The MicroVM driver does not apply the image's Dockerfile `ENV`.** `PATH` and `PYTHONPATH` were unset (`python` not found, exit 127). A sandbox runner must set `PATH`, `PYTHONPATH` and `ADAPTER_PYTHON` explicitly or use absolute paths.
+- The provider stays in OpenShell's credential store (holding the real key) until deleted; the check script deletes it on exit unless `KEEP_PROVIDER=1`.
+- Adapted profile: `provider-openai.yaml` (NVIDIA's `providers/openai.yaml` with `binaries` set to our Python and curl).
+- Not checked: whether OpenShell encrypts the store at rest; keys that agents must put in request bodies instead of headers (the profile injects a bearer header only).

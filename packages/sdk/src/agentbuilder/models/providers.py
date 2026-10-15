@@ -66,7 +66,6 @@ class ResolvedModel:
     api_key: Secret | None
     api_key_env: str | None  # the variable name, for runtimes that read the key themselves (never the value)
     temperature: float | None
-    max_tokens: int | None
     agent_mode: Literal["tool_calling", "react"]
 
 
@@ -93,6 +92,5 @@ def resolve_model(
         api_key=key,
         api_key_env=key_env,
         temperature=spec.temperature,
-        max_tokens=spec.max_tokens,
         agent_mode=resolve_agent_mode(spec),
     )
