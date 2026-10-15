@@ -87,15 +87,14 @@ def test_works_in_files_that_use_future_annotations(tmp_path):
     assert module.book.call({"when": "2026-01-02T03:04:05", "title": "t"}) == "t"
 
 
-@pytest.mark.parametrize(
-    "hint", ["NotDefinedAnywhere", '"list[str"']
-)  # an unknown name, and a quoted typo (SyntaxError)
+# NameError, SyntaxError and AttributeError: every way a hint can fail to resolve must give the same clear error
+@pytest.mark.parametrize("hint", ["NotDefinedAnywhere", '"list[str"', '"datetime.nope"'])
 def test_unresolvable_hints_give_a_clear_error(tmp_path, hint):
     with pytest.raises(ToolDefinitionError, match="cannot resolve a type hint"):
         _load(
             tmp_path,
             "bad_tools",
-            "from __future__ import annotations\n"
+            "from __future__ import annotations\nimport datetime\n"
             "from agentbuilder.tools import tool\n\n"
             "@tool(namespace='x', description='d')\n"
             f"def f(a: {hint}) -> str:\n"
