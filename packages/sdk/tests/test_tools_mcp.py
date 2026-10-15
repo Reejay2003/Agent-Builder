@@ -67,6 +67,21 @@ def test_audit_log_hides_argument_values_by_default_and_is_private(tmp_path):
     assert oct(log.stat().st_mode & 0o777) == "0o600"
 
 
+def test_an_existing_wide_open_log_file_is_tightened(tmp_path):
+    from agentbuilder.tools import tool
+    from agentbuilder.tools.mcp_server import _audit
+
+    @tool(namespace="x", description="d")
+    def note(body: str) -> str:
+        return body
+
+    log = tmp_path / "old.jsonl"
+    log.write_text("")
+    log.chmod(0o644)  # created earlier by something else, readable by other users
+    _audit(str(log), note, {"body": "private text"}, False, True)  # --log-args writes the value
+    assert oct(log.stat().st_mode & 0o777) == "0o600" and "private text" in log.read_text()
+
+
 def test_server_refuses_clashing_names_and_missing_mocks():
     from agentbuilder.tools import tool
     from agentbuilder.tools.mcp_server import build_server

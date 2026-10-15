@@ -104,7 +104,7 @@ def test_unenforced_approvals_are_warned_about_loudly():
     quiet = AgentSpec.from_dict(
         {"name": "x", "model": {"provider": "openai", "model": "m"}, "tools": ["demo.add_numbers"]}
     )
-    assert compile_agent(quiet, demo_catalog()).warnings == []
+    assert [w for w in compile_agent(quiet, demo_catalog()).warnings if "NOT applied yet" not in w] == []
 
 
 def test_mutating_tools_are_warned_about_even_when_a_sandbox_preset_is_set():
@@ -149,11 +149,13 @@ def test_fields_that_are_accepted_but_not_applied_are_listed():
     assert "integrations" not in warning and "voice" not in warning  # only what was actually set
 
 
-def test_defaults_do_not_trigger_the_not_applied_warning():
+def test_even_the_default_guardrails_are_reported_as_not_applied():
     spec = AgentSpec.from_dict(
         {"name": "x", "model": {"provider": "openai", "model": "m"}, "tools": ["demo.add_numbers"]}
     )
-    assert compile_agent(spec, demo_catalog()).warnings == []
+    assert compile_agent(spec, demo_catalog()).warnings == [
+        "these spec fields are accepted but NOT applied yet: guardrails.profile"  # nothing else: only what is set
+    ]
 
 
 def test_max_tokens_is_not_emitted_because_the_nat_adapter_rejects_it():

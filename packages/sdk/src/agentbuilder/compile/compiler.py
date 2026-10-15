@@ -27,7 +27,7 @@ def _not_applied(spec: AgentSpec) -> list[str]:
     """Spec fields that are accepted but change nothing yet (silence would look like protection)."""
     m = spec.model
     candidates = {
-        "guardrails.profile": spec.guardrails.profile != "standard",
+        "guardrails.profile": True,  # even the default 'standard' is not enforced yet; never imply protection
         "model.reliability": bool(m.reliability.model_dump(exclude_defaults=True)),
         "model.routing": m.routing is not None,
         "model.max_tokens": m.max_tokens is not None,

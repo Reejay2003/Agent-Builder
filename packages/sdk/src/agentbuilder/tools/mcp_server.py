@@ -28,7 +28,9 @@ def _audit(path: str | None, tool: Tool, arguments: dict[str, Any], mock: bool, 
     if path:
         args = arguments if log_args else {k: f"{type(v).__name__}({len(str(v))})" for k, v in arguments.items()}
         record = {"t": time.time(), "tool": tool.mcp_name, "id": tool.id, "args": args, "mock": mock}
-        with os.fdopen(os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600), "a", encoding="utf-8") as f:
+        fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
+        os.fchmod(fd, 0o600)  # also tightens a file that already existed with wider permissions
+        with os.fdopen(fd, "a", encoding="utf-8") as f:
             f.write(json.dumps(record, default=str) + "\n")
 
 

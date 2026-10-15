@@ -122,6 +122,7 @@ Cleanup already done: adapter moved to `services/runner/nat_adapter/` (own READM
 - Relay licence and version compatibility with Switchyard's plugin (needs Relay 0.8 to under 1.0). (S4, S7)
 
 ## Changelog (newest first, one line each)
+- 2026-10-15: Ponytail follow-ups A, B, C fixed (existing log file tightened to 0600, default guardrails reported as not applied, any unresolvable type hint gives a clear tool error); 137 tests pass. Open: default log path in /tmp is predictable and `os.open` follows symlinks (demo server only).
 - 2026-10-15: Ponytail review round 1: 9 findings fixed with regression tests (135 tests pass); OpenShell key passing verified on the microVM driver (9 checks, real agent ran in the VM); key-passing check script has an automatic verdict.
 - 2026-10-14: SDK week 2: tools (`@tool`, manifests, MCP wrapper), models (BYOK, credentials, capability table), compilers A and B with goldens; compiled configs run on real NAT and Fabric offline; 119 offline + 6 NAT tests.
 - 2026-10-14: OpenShell switched to the MicroVM driver; egress compared with Docker (no leaks either way; VM adds isolation at about 10x start time and 8x memory).

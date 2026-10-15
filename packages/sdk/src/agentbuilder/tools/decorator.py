@@ -36,7 +36,7 @@ def _input_model(fn: Callable[..., Any], name: str) -> type[BaseModel]:
     fields: dict[str, Any] = {}
     try:
         hints = get_type_hints(fn, include_extras=True)  # resolves string hints (`from __future__ import annotations`)
-    except NameError as exc:
+    except Exception as exc:  # resolving a hint is a pure lookup: NameError, SyntaxError, AttributeError, TypeError...
         raise ToolDefinitionError(
             f"tool '{name}': cannot resolve a type hint ({exc}); define the type at module level"
         ) from exc
