@@ -1,4 +1,4 @@
-# Agent Builder Platform: Master Plan (v10)
+# Agent Builder Platform: Master Plan (v11)
 
 Last updated: 2026-10-08. Personal open-source project on GitHub. No revenue, no funding, so **everything must be free or open source** (section 3).
 
@@ -8,6 +8,11 @@ Tags used for facts:
 - **[memory]**: from my background knowledge, not checked this session; confirm before adopting
 
 ## 0. Changes
+
+### v11 (2026-11-05)
+1. **The local web UI is part of the SDK story** (new 16.12): `ab ui` starts `apps/web` on localhost; agents are built there; it talks to the SDK through a local API. The contributor's web app (auth, encrypted model configs, test connection, wizard) is the base.
+2. **Four web-versus-SDK decisions settled** (COMPLETED.md Decisions, 2026-11-05): UI is the SDK's front end; `agent_mode: auto`; one-call Test connection in the wizard with the capability table as a passive hint; keys live in the web vault, specs hold `secret://` references, OpenShell providers deliver them to sandboxes.
+3. Week 3 scope: `LocalRunner` (packaged as `agentbuilder-nat`), the trajectory reader (`agentbuilder.observe`), compiler C (sandbox policy and provider profile from the tool manifests).
 
 ### v10 (2026-10-12)
 1. **The project becomes an SDK.** New section 16: the SDK is the core library (Python first); the wizard, server and CLI are clients of it; the AgentSpec stays the one stable contract. Two distributions (`agentbuilder` core, framework-agnostic; `agentbuilder-nat` runner adapter with the pinned NVIDIA stack), versions 0.1 to 1.0 mapped to the roadmap phases, a 10-task 0.1 backlog, a migration table for what exists today, risks, and six open decisions for the owner (16.10).
@@ -801,6 +806,14 @@ Sandbox and approvals (v0.3): `Agent(..., sandbox="openshell", approve=callback)
 8. **SDK-8** `RunResult` and ATIF trajectory reader with token and tool-call totals. (P1.3)
 9. **SDK-9** CLI: `validate`, `compile`, `run`, `doctor`. (new)
 10. **SDK-10** three examples, docs skeleton, clean-install CI job, `0.1.0a1` to TestPyPI.
+
+### 16.12 The local web UI
+- **Launch:** `ab ui` starts the web app from the SDK on `127.0.0.1` (default port 3000) and opens the browser. It binds to localhost only. A source checkout runs `apps/web` with Node (22.13 or newer, for the built-in SQLite); a packaged build for `pip install` users is a later task.
+- **Roles:** the browser UI edits AgentSpecs (the same files the Python API reads and writes), manages model connections, and starts runs; the SDK compiles and runs them (`LocalRunner`, later the sandbox runner) and returns a `RunResult` with the trajectory for the trace view.
+- **Contract:** the UI writes specs through the SDK's JSON Schema (no hand-rolled YAML), with `agent_mode: auto` and `credential_ref: secret://modelcfg/<id>/api_key`.
+- **Keys:** the web vault (AES-256-GCM per-user key, wrapped by the login password) is a `SecretStore` for `secret://modelcfg/...`. In sandbox runs the runner turns the resolved key into an OpenShell provider (`spikes/s3-openshell/part 4`), so the agent only ever sees a placeholder.
+- **Local API (to build):** a small localhost service in front of the SDK (`POST /api/runs`, `GET /api/runs/:id`, `POST /api/compile`), started by `ab ui` next to the web server; the UI never imports Python. Until it exists the UI can only author and test model connections.
+- **Limits:** single user, localhost only; the vault must be unlocked to run (no unattended runs); the packaged-UI and auto-update story is open.
 
 ## 17. Reference links
 - NeMo Agent Toolkit: https://github.com/NVIDIA/NeMo-Agent-Toolkit
