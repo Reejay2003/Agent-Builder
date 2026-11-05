@@ -1,0 +1,229 @@
+{
+ "agent": {
+  "model_name": "gpt-4.1-mini",
+  "name": "calc-helper",
+  "version": "0.9.4"
+ },
+ "extra": {
+  "nemo_relay": {
+   "session_instance_id": "01a1ac39-ef89-7ce2-9f76-0775b029f29b"
+  }
+ },
+ "final_metrics": {
+  "total_completion_tokens": 27,
+  "total_prompt_tokens": 215,
+  "total_steps": 4
+ },
+ "schema_version": "ATIF-v1.7",
+ "session_id": "01a1ac39-ef89-7ce2-9f76-0775b029f29b",
+ "steps": [
+  {
+   "extra": {
+    "ancestry": {
+     "function_id": "01a1ac39-ef8c-75d0-996b-8903737d45a2",
+     "function_name": "nat-llm",
+     "parent_id": "01a1ac39-ef89-7ce2-9f76-0775b029f29b",
+     "parent_name": "nat-request"
+    },
+    "llm_request": {
+     "input": {
+      "messages": [
+       {
+        "content": "demo question",
+        "type": "human"
+       }
+      ]
+     },
+     "model": "gpt-4.1-mini"
+    }
+   },
+   "message": "{\"input\":{\"messages\":[{\"content\":\"demo question\",\"type\":\"human\"}]},\"model\":\"gpt-4.1-mini\"}",
+   "source": "user",
+   "step_id": 1,
+   "timestamp": "2026-11-05T15:00:40.460891+00:00"
+  },
+  {
+   "extra": {
+    "ancestry": {
+     "function_id": "01a1ac39-ef8c-75d0-996b-8903737d45a2",
+     "function_name": "nat-llm",
+     "parent_id": "01a1ac39-ef89-7ce2-9f76-0775b029f29b",
+     "parent_name": "nat-request"
+    },
+    "invocation": {
+     "end_timestamp": 1793890840.513,
+     "framework": "nemo_relay",
+     "invocation_id": "01a1ac39-ef8c-75d0-996b-8903737d45a2",
+     "start_timestamp": 1793890840.46,
+     "status": "completed"
+    },
+    "llm_response": {
+     "content": ""
+    },
+    "tool_ancestry": [
+     {
+      "function_id": "01a1ac39-efc4-7921-a36a-d1871de61514",
+      "function_name": "demo__add_numbers",
+      "parent_id": "01a1ac39-ef89-7ce2-9f76-0775b029f29b",
+      "parent_name": "nat-request"
+     },
+     {
+      "function_id": "01a1ac39-efc4-7921-a36a-d19948f78318",
+      "function_name": "demo__count_words",
+      "parent_id": "01a1ac39-ef89-7ce2-9f76-0775b029f29b",
+      "parent_name": "nat-request"
+     }
+    ],
+    "tool_invocations": [
+     {
+      "end_timestamp": 1793890840.53,
+      "framework": "nemo_relay",
+      "invocation_id": "call_1_0",
+      "start_timestamp": 1793890840.516,
+      "status": "completed"
+     },
+     {
+      "end_timestamp": 1793890840.53,
+      "framework": "nemo_relay",
+      "invocation_id": "call_1_1",
+      "start_timestamp": 1793890840.516,
+      "status": "completed"
+     }
+    ]
+   },
+   "llm_call_count": 1,
+   "message": "",
+   "metrics": {
+    "completion_tokens": 16,
+    "prompt_tokens": 53
+   },
+   "model_name": "gpt-4.1-mini",
+   "observation": {
+    "results": [
+     {
+      "extra": {
+       "event_name": "demo__add_numbers",
+       "event_uuid": "01a1ac39-efc4-7921-a36a-d1871de61514",
+       "parent_event_uuid": "01a1ac39-ef89-7ce2-9f76-0775b029f29b",
+       "tool_result": {
+        "content": "42.5",
+        "status": "success"
+       }
+      },
+      "source_call_id": "call_1_0"
+     },
+     {
+      "extra": {
+       "event_name": "demo__count_words",
+       "event_uuid": "01a1ac39-efc4-7921-a36a-d19948f78318",
+       "parent_event_uuid": "01a1ac39-ef89-7ce2-9f76-0775b029f29b",
+       "tool_result": {
+        "content": "3",
+        "status": "success"
+       }
+      },
+      "source_call_id": "call_1_1"
+     }
+    ]
+   },
+   "source": "agent",
+   "step_id": 2,
+   "timestamp": "2026-11-05T15:00:40.513985+00:00",
+   "tool_calls": [
+    {
+     "arguments": {
+      "a": 17.5,
+      "b": 25
+     },
+     "extra": {
+      "event_name": "demo__add_numbers",
+      "event_uuid": "01a1ac39-efc4-7921-a36a-d1871de61514",
+      "parent_event_uuid": "01a1ac39-ef89-7ce2-9f76-0775b029f29b"
+     },
+     "function_name": "demo__add_numbers",
+     "tool_call_id": "call_1_0"
+    },
+    {
+     "arguments": {
+      "text": "one two three"
+     },
+     "extra": {
+      "event_name": "demo__count_words",
+      "event_uuid": "01a1ac39-efc4-7921-a36a-d19948f78318",
+      "parent_event_uuid": "01a1ac39-ef89-7ce2-9f76-0775b029f29b"
+     },
+     "function_name": "demo__count_words",
+     "tool_call_id": "call_1_1"
+    }
+   ]
+  },
+  {
+   "extra": {
+    "ancestry": {
+     "function_id": "01a1ac39-efd3-7443-84cf-c3118011c055",
+     "function_name": "nat-llm",
+     "parent_id": "01a1ac39-ef89-7ce2-9f76-0775b029f29b",
+     "parent_name": "nat-request"
+    },
+    "llm_request": {
+     "input": {
+      "messages": [
+       {
+        "content": "demo question",
+        "type": "human"
+       },
+       {
+        "content": "",
+        "type": "ai"
+       },
+       {
+        "content": "42.5",
+        "type": "tool"
+       },
+       {
+        "content": "3",
+        "type": "tool"
+       }
+      ]
+     },
+     "model": "gpt-4.1-mini"
+    }
+   },
+   "message": "{\"input\":{\"messages\":[{\"content\":\"demo question\",\"type\":\"human\"},{\"content\":\"\",\"type\":\"ai\"},{\"content\":\"42.5\",\"type\":\"tool\"},{\"content\":\"3\",\"type\":\"tool\"}]},\"model\":\"gpt-4.1-mini\"}",
+   "source": "user",
+   "step_id": 3,
+   "timestamp": "2026-11-05T15:00:40.531717+00:00"
+  },
+  {
+   "extra": {
+    "ancestry": {
+     "function_id": "01a1ac39-efd3-7443-84cf-c3118011c055",
+     "function_name": "nat-llm",
+     "parent_id": "01a1ac39-ef89-7ce2-9f76-0775b029f29b",
+     "parent_name": "nat-request"
+    },
+    "invocation": {
+     "end_timestamp": 1793890840.539,
+     "framework": "nemo_relay",
+     "invocation_id": "01a1ac39-efd3-7443-84cf-c3118011c055",
+     "start_timestamp": 1793890840.531,
+     "status": "completed"
+    },
+    "llm_response": {
+     "content": "17.5 plus 25 is 42.5 and the text has 3 words."
+    }
+   },
+   "llm_call_count": 1,
+   "message": "17.5 plus 25 is 42.5 and the text has 3 words.",
+   "metrics": {
+    "completion_tokens": 11,
+    "prompt_tokens": 162
+   },
+   "model_name": "gpt-4.1-mini",
+   "source": "agent",
+   "step_id": 4,
+   "timestamp": "2026-11-05T15:00:40.539132+00:00"
+  }
+ ],
+ "trajectory_id": "01a1ac39-ef89-7ce2-9f76-0775b029f29b"
+}

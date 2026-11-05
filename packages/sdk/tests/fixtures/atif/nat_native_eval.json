@@ -1,0 +1,812 @@
+[
+ {
+  "expected_output_obj": "42.5",
+  "item_id": "q1_rep0",
+  "metadata": {},
+  "output_obj": "The sum of 17.5 and 25 is 42.5. The question contains 5 words.",
+  "trajectory": {
+   "agent": {
+    "extra": null,
+    "model_name": "gpt-4.1-nano",
+    "name": "nat-agent",
+    "tool_definitions": null,
+    "version": "0.0.0"
+   },
+   "continued_trajectory_ref": null,
+   "extra": null,
+   "final_metrics": {
+    "extra": null,
+    "total_cached_tokens": null,
+    "total_completion_tokens": 89,
+    "total_cost_usd": null,
+    "total_prompt_tokens": 363,
+    "total_steps": 4
+   },
+   "notes": null,
+   "schema_version": "ATIF-v1.7",
+   "session_id": "builtins.str:'q1_rep0'",
+   "steps": [
+    {
+     "extra": {
+      "ancestry": {
+       "function_id": "root",
+       "function_name": "root"
+      },
+      "invocation": {
+       "status": "completed"
+      }
+     },
+     "is_copied_context": null,
+     "llm_call_count": null,
+     "message": "What is 17.5 plus 25? Use the tools.",
+     "metrics": null,
+     "model_name": null,
+     "observation": null,
+     "reasoning_content": null,
+     "reasoning_effort": null,
+     "source": "user",
+     "step_id": 1,
+     "timestamp": "2026-10-11T11:35:04.647234+00:00",
+     "tool_calls": null
+    },
+    {
+     "extra": {
+      "ancestry": {
+       "function_id": "7d2c0105-42c7-44ce-9ac6-79c0374560d7",
+       "function_name": "<workflow>",
+       "parent_id": "root",
+       "parent_name": "root"
+      },
+      "invocation": {
+       "end_timestamp": 1791718504.652079,
+       "framework": "langchain",
+       "start_timestamp": 1791718504.651565,
+       "status": "completed"
+      },
+      "tool_ancestry": [
+       {
+        "function_id": "7d2c0105-42c7-44ce-9ac6-79c0374560d7",
+        "function_name": "<workflow>",
+        "parent_id": "root",
+        "parent_name": "root"
+       }
+      ],
+      "tool_invocations": [
+       {
+        "end_timestamp": 1791718504.652079,
+        "framework": "langchain",
+        "invocation_id": "call_01a12abe-b8cb-7a21-998a-f1c3e34287c0",
+        "start_timestamp": 1791718504.651565,
+        "status": "completed"
+       }
+      ]
+     },
+     "is_copied_context": null,
+     "llm_call_count": null,
+     "message": "",
+     "metrics": null,
+     "model_name": null,
+     "observation": {
+      "results": [
+       {
+        "content": "[{'content': 'What is 17.5 plus 25? Use the tools.', 'additional_kwargs': {}, 'response_metadata': {}, 'type': 'human', 'name': None, 'id': None}]",
+        "extra": null,
+        "source_call_id": "call_01a12abe-b8cb-7a21-998a-f1c3e34287c0",
+        "subagent_trajectory_ref": null
+       }
+      ]
+     },
+     "reasoning_content": null,
+     "reasoning_effort": null,
+     "source": "agent",
+     "step_id": 2,
+     "timestamp": "2026-10-11T11:35:04.652079+00:00",
+     "tool_calls": [
+      {
+       "arguments": {
+        "input": ""
+       },
+       "extra": null,
+       "function_name": "PromptPassthrough",
+       "tool_call_id": "call_01a12abe-b8cb-7a21-998a-f1c3e34287c0"
+      }
+     ]
+    },
+    {
+     "extra": {
+      "ancestry": {
+       "function_id": "7d2c0105-42c7-44ce-9ac6-79c0374560d7",
+       "function_name": "<workflow>",
+       "parent_id": "root",
+       "parent_name": "root"
+      },
+      "invocation": {
+       "end_timestamp": 1791718505.9866,
+       "framework": "langchain",
+       "start_timestamp": 1791718504.6525671,
+       "status": "completed"
+      },
+      "tool_ancestry": [
+       {
+        "function_id": "7d2c0105-42c7-44ce-9ac6-79c0374560d7",
+        "function_name": "<workflow>",
+        "parent_id": "root",
+        "parent_name": "root"
+       },
+       {
+        "function_id": "7d2c0105-42c7-44ce-9ac6-79c0374560d7",
+        "function_name": "<workflow>",
+        "parent_id": "root",
+        "parent_name": "root"
+       },
+       {
+        "function_id": "7d2c0105-42c7-44ce-9ac6-79c0374560d7",
+        "function_name": "<workflow>",
+        "parent_id": "root",
+        "parent_name": "root"
+       },
+       {
+        "function_id": "7d2c0105-42c7-44ce-9ac6-79c0374560d7",
+        "function_name": "<workflow>",
+        "parent_id": "root",
+        "parent_name": "root"
+       },
+       {
+        "function_id": "7d2c0105-42c7-44ce-9ac6-79c0374560d7",
+        "function_name": "<workflow>",
+        "parent_id": "root",
+        "parent_name": "root"
+       },
+       {
+        "function_id": "7d2c0105-42c7-44ce-9ac6-79c0374560d7",
+        "function_name": "<workflow>",
+        "parent_id": "root",
+        "parent_name": "root"
+       },
+       {
+        "function_id": "a0de008a-d22e-4f33-b862-de4fb89b1e96",
+        "function_name": "demo_tools__add_numbers",
+        "parent_id": "7d2c0105-42c7-44ce-9ac6-79c0374560d7",
+        "parent_name": "<workflow>"
+       },
+       {
+        "function_id": "84969472-0447-49f8-a75a-964334960484",
+        "function_name": "demo_tools__count_words",
+        "parent_id": "7d2c0105-42c7-44ce-9ac6-79c0374560d7",
+        "parent_name": "<workflow>"
+       },
+       {
+        "function_id": "7d2c0105-42c7-44ce-9ac6-79c0374560d7",
+        "function_name": "<workflow>",
+        "parent_id": "root",
+        "parent_name": "root"
+       }
+      ],
+      "tool_invocations": [
+       {
+        "end_timestamp": 1791718505.990537,
+        "framework": "langchain",
+        "invocation_id": "call_01a12abe-b8cb-7a21-998a-f1a4ed317dbd",
+        "start_timestamp": 1791718504.65119,
+        "status": "completed"
+       },
+       {
+        "end_timestamp": 1791718505.987408,
+        "framework": "langchain",
+        "invocation_id": "call_01a12abe-b8cb-7a21-998a-f1bc91082dbc",
+        "start_timestamp": 1791718504.651368,
+        "status": "completed"
+       },
+       {
+        "end_timestamp": 1791718505.990078,
+        "framework": "langchain",
+        "invocation_id": "call_01a12abe-be05-72f2-8fea-9d38ef5443b4",
+        "start_timestamp": 1791718505.989546,
+        "status": "completed"
+       },
+       {
+        "end_timestamp": 1791718506.0075479,
+        "framework": "langchain",
+        "invocation_id": "call_01a12abe-be08-7093-b7c3-4ac9aacb3ff3",
+        "start_timestamp": 1791718505.992026,
+        "status": "completed"
+       },
+       {
+        "end_timestamp": 1791718506.006048,
+        "framework": "langchain",
+        "invocation_id": "call_01a12abe-be08-7093-b7c3-4ad7159df597",
+        "start_timestamp": 1791718505.9928892,
+        "status": "completed"
+       },
+       {
+        "end_timestamp": 1791718506.0071812,
+        "framework": "langchain",
+        "invocation_id": "call_01a12abe-be09-7791-af62-7150df08a085",
+        "start_timestamp": 1791718505.9934459,
+        "status": "completed"
+       },
+       {
+        "invocation_id": "call_a0de008a-d22e-4f33-b862-de4fb89b1e96",
+        "status": "completed"
+       },
+       {
+        "invocation_id": "call_84969472-0447-49f8-a75a-964334960484",
+        "status": "completed"
+       },
+       {
+        "end_timestamp": 1791718506.009068,
+        "framework": "langchain",
+        "invocation_id": "call_01a12abe-be18-7490-a949-4ee6dcd6f52d",
+        "start_timestamp": 1791718506.0085928,
+        "status": "completed"
+       }
+      ]
+     },
+     "is_copied_context": null,
+     "llm_call_count": null,
+     "message": "\n\nTool calls: [{'name': 'demo_tools__add_numbers', 'args': {'a': 17.5, 'b': 25}, 'id': 'call_DoYverduCamkKPCTLKOpg27K', 'type': 'tool_call'}, {'name': 'demo_tools__count_words', 'args': {'text': 'What is 17.5 plus 25?'}, 'id': 'call_FBKs7dbHRIvZlUcchgdpDexx', 'type': 'tool_call'}]",
+     "metrics": {
+      "cached_tokens": null,
+      "completion_token_ids": null,
+      "completion_tokens": 65,
+      "cost_usd": null,
+      "extra": null,
+      "logprobs": null,
+      "prompt_token_ids": null,
+      "prompt_tokens": 140
+     },
+     "model_name": "gpt-4.1-nano",
+     "observation": {
+      "results": [
+       {
+        "content": "{'messages': [{'content': 'What is 17.5 plus 25? Use the tools.', 'additional_kwargs': {}, 'response_metadata': {}, 'type': 'human', 'name': None, 'id': None}, {'content': '', 'additional_kwargs': {'tool_calls': [{'type': 'function', 'id': 'call_DoYverduCamkKPCTLKOpg27K', 'function': {'name': 'demo_tools__add_numbers', 'arguments': '{\"a\": 17.5, \"b\": 25}'}}, {'type': 'function', 'id': 'call_FBKs7dbHRIvZlUcchgdpDexx', 'function': {'name': 'demo_tools__count_words', 'arguments': '{\"text\": \"What is 17.5 plus 25?\"}'}}]}, 'response_metadata': {'model_provider': 'openai', 'finish_reason': 'tool_calls', 'model_name': 'gpt-4.1-nano-2025-04-14', 'system_fingerprint': 'fp_db27b144de', 'service_tier': 'default'}, 'type': 'ai', 'name': None, 'id': 'lc_run--01a12abe-b8cc-7161-9f5a-f4d790b66df2'}]}",
+        "extra": null,
+        "source_call_id": "call_01a12abe-b8cb-7a21-998a-f1a4ed317dbd",
+        "subagent_trajectory_ref": null
+       },
+       {
+        "content": "{'content': '', 'additional_kwargs': {}, 'response_metadata': {'model_provider': 'openai', 'finish_reason': 'tool_calls', 'model_name': 'gpt-4.1-nano-2025-04-14', 'system_fingerprint': 'fp_db27b144de', 'service_tier': 'default'}, 'type': 'AIMessageChunk', 'name': None, 'id': 'lc_run--01a12abe-b8cc-7161-9f5a-f4d790b66df2', 'tool_calls': [{'name': 'demo_tools__add_numbers', 'args': {'a': 17.5, 'b': 25}, 'id': 'call_DoYverduCamkKPCTLKOpg27K', 'type': 'tool_call'}, {'name': 'demo_tools__count_words', 'args': {'text': 'What is 17.5 plus 25?'}, 'id': 'call_FBKs7dbHRIvZlUcchgdpDexx', 'type': 'tool_call'}], 'invalid_tool_calls': [], 'usage_metadata': {'input_tokens': 140, 'output_tokens': 65, 'total_tokens': 205, 'input_token_details': {'audio': 0, 'cache_read': 0}, 'output_token_details': {'audio': 0, 'reasoning': 0}}, 'tool_call_chunks': [{'name': 'demo_tools__add_numbers', 'args': '{\"a\": 17.5, \"b\": 25}', 'id': 'call_DoYverduCamkKPCTLKOpg27K', 'index': 0, 'type': 'tool_call_chunk'}, {'name': 'demo_tools__count_words', 'args': '{\"text\": \"What is 17.5 plus 25?\"}', 'id': 'call_FBKs7dbHRIvZlUcchgdpDexx', 'index': 1, 'type': 'tool_call_chunk'}], 'chunk_position': 'last'}",
+        "extra": null,
+        "source_call_id": "call_01a12abe-b8cb-7a21-998a-f1bc91082dbc",
+        "subagent_trajectory_ref": null
+       },
+       {
+        "content": "AgentDecision.TOOL",
+        "extra": null,
+        "source_call_id": "call_01a12abe-be05-72f2-8fea-9d38ef5443b4",
+        "subagent_trajectory_ref": null
+       },
+       {
+        "content": "{'messages': [{'content': 'What is 17.5 plus 25? Use the tools.', 'additional_kwargs': {}, 'response_metadata': {}, 'type': 'human', 'name': None, 'id': None}, {'content': '', 'additional_kwargs': {'tool_calls': [{'type': 'function', 'id': 'call_DoYverduCamkKPCTLKOpg27K', 'function': {'name': 'demo_tools__add_numbers', 'arguments': '{\"a\": 17.5, \"b\": 25}'}}, {'type': 'function', 'id': 'call_FBKs7dbHRIvZlUcchgdpDexx', 'function': {'name': 'demo_tools__count_words', 'arguments': '{\"text\": \"What is 17.5 plus 25?\"}'}}]}, 'response_metadata': {'model_provider': 'openai', 'finish_reason': 'tool_calls', 'model_name': 'gpt-4.1-nano-2025-04-14', 'system_fingerprint': 'fp_db27b144de', 'service_tier': 'default'}, 'type': 'ai', 'name': None, 'id': 'lc_run--01a12abe-b8cc-7161-9f5a-f4d790b66df2'}, {'content': '42.5', 'additional_kwargs': {}, 'response_metadata': {}, 'type': 'tool', 'name': 'demo_tools__add_numbers', 'id': None}, {'content': '5', 'additional_kwargs': {}, 'response_metadata': {}, 'type': 'tool', 'name': 'demo_tools__count_words', 'id': None}]}",
+        "extra": null,
+        "source_call_id": "call_01a12abe-be08-7093-b7c3-4ac9aacb3ff3",
+        "subagent_trajectory_ref": null
+       },
+       {
+        "content": "{'content': '42.5', 'additional_kwargs': {}, 'response_metadata': {}, 'type': 'tool', 'name': 'demo_tools__add_numbers', 'id': None, 'tool_call_id': 'call_DoYverduCamkKPCTLKOpg27K', 'artifact': None, 'status': 'success'}",
+        "extra": null,
+        "source_call_id": "call_01a12abe-be08-7093-b7c3-4ad7159df597",
+        "subagent_trajectory_ref": null
+       },
+       {
+        "content": "{'content': '5', 'additional_kwargs': {}, 'response_metadata': {}, 'type': 'tool', 'name': 'demo_tools__count_words', 'id': None, 'tool_call_id': 'call_FBKs7dbHRIvZlUcchgdpDexx', 'artifact': None, 'status': 'success'}",
+        "extra": null,
+        "source_call_id": "call_01a12abe-be09-7791-af62-7150df08a085",
+        "subagent_trajectory_ref": null
+       },
+       {
+        "content": "42.5",
+        "extra": null,
+        "source_call_id": "call_a0de008a-d22e-4f33-b862-de4fb89b1e96",
+        "subagent_trajectory_ref": null
+       },
+       {
+        "content": "5",
+        "extra": null,
+        "source_call_id": "call_84969472-0447-49f8-a75a-964334960484",
+        "subagent_trajectory_ref": null
+       },
+       {
+        "content": "[{'content': 'What is 17.5 plus 25? Use the tools.', 'additional_kwargs': {}, 'response_metadata': {}, 'type': 'human', 'name': None, 'id': None}, {'content': '', 'additional_kwargs': {'tool_calls': [{'type': 'function', 'id': 'call_DoYverduCamkKPCTLKOpg27K', 'function': {'name': 'demo_tools__add_numbers', 'arguments': '{\"a\": 17.5, \"b\": 25}'}}, {'type': 'function', 'id': 'call_FBKs7dbHRIvZlUcchgdpDexx', 'function': {'name': 'demo_tools__count_words', 'arguments': '{\"text\": \"What is 17.5 plus 25?\"}'}}]}, 'response_metadata': {'model_provider': 'openai', 'finish_reason': 'tool_calls', 'model_name': 'gpt-4.1-nano-2025-04-14', 'system_fingerprint': 'fp_db27b144de', 'service_tier': 'default'}, 'type': 'ai', 'name': None, 'id': 'lc_run--01a12abe-b8cc-7161-9f5a-f4d790b66df2', 'tool_calls': [{'name': 'demo_tools__add_numbers', 'args': {'a': 17.5, 'b': 25}, 'id': 'call_DoYverduCamkKPCTLKOpg27K', 'type': 'tool_call'}, {'name': 'demo_tools__count_words', 'args': {'text': 'What is 17.5 plus 25?'}, 'id': 'call_FBKs7dbHRIvZlUcchgdpDexx', 'type': 'tool_call'}], 'invalid_tool_calls': [], 'usage_metadata': {'input_tokens': 140, 'output_tokens': 65, 'total_tokens': 205, 'input_token_details': {'audio': 0, 'cache_read': 0}, 'output_token_details': {'audio': 0, 'reasoning': 0}}}, {'content': '42.5', 'additional_kwargs': {}, 'response_metadata': {}, 'type': 'tool', 'name': 'demo_tools__add_numbers', 'id': None, 'tool_call_id': 'call_DoYverduCamkKPCTLKOpg27K', 'artifact': None, 'status': 'success'}, {'content': '5', 'additional_kwargs': {}, 'response_metadata': {}, 'type': 'tool', 'name': 'demo_tools__count_words', 'id': None, 'tool_call_id': 'call_FBKs7dbHRIvZlUcchgdpDexx', 'artifact': None, 'status': 'success'}]",
+        "extra": null,
+        "source_call_id": "call_01a12abe-be18-7490-a949-4ee6dcd6f52d",
+        "subagent_trajectory_ref": null
+       }
+      ]
+     },
+     "reasoning_content": null,
+     "reasoning_effort": null,
+     "source": "agent",
+     "step_id": 3,
+     "timestamp": "2026-10-11T11:35:05.986600+00:00",
+     "tool_calls": [
+      {
+       "arguments": {
+        "messages": [
+         {
+          "additional_kwargs": {},
+          "content": "What is 17.5 plus 25? Use the tools.",
+          "id": null,
+          "name": null,
+          "response_metadata": {},
+          "type": "human"
+         }
+        ]
+       },
+       "extra": null,
+       "function_name": "agent",
+       "tool_call_id": "call_01a12abe-b8cb-7a21-998a-f1a4ed317dbd"
+      },
+      {
+       "arguments": {
+        "input": ""
+       },
+       "extra": null,
+       "function_name": "RunnableSequence",
+       "tool_call_id": "call_01a12abe-b8cb-7a21-998a-f1bc91082dbc"
+      },
+      {
+       "arguments": {
+        "messages": [
+         {
+          "additional_kwargs": {},
+          "content": "What is 17.5 plus 25? Use the tools.",
+          "id": null,
+          "name": null,
+          "response_metadata": {},
+          "type": "human"
+         },
+         {
+          "additional_kwargs": {
+           "tool_calls": [
+            {
+             "function": {
+              "arguments": "{\"a\": 17.5, \"b\": 25}",
+              "name": "demo_tools__add_numbers"
+             },
+             "id": "call_DoYverduCamkKPCTLKOpg27K",
+             "type": "function"
+            },
+            {
+             "function": {
+              "arguments": "{\"text\": \"What is 17.5 plus 25?\"}",
+              "name": "demo_tools__count_words"
+             },
+             "id": "call_FBKs7dbHRIvZlUcchgdpDexx",
+             "type": "function"
+            }
+           ]
+          },
+          "content": "",
+          "id": "lc_run--01a12abe-b8cc-7161-9f5a-f4d790b66df2",
+          "name": null,
+          "response_metadata": {
+           "finish_reason": "tool_calls",
+           "model_name": "gpt-4.1-nano-2025-04-14",
+           "model_provider": "openai",
+           "service_tier": "default",
+           "system_fingerprint": "fp_db27b144de"
+          },
+          "type": "ai"
+         }
+        ]
+       },
+       "extra": null,
+       "function_name": "conditional_edge",
+       "tool_call_id": "call_01a12abe-be05-72f2-8fea-9d38ef5443b4"
+      },
+      {
+       "arguments": {
+        "messages": [
+         {
+          "additional_kwargs": {},
+          "content": "What is 17.5 plus 25? Use the tools.",
+          "id": null,
+          "name": null,
+          "response_metadata": {},
+          "type": "human"
+         },
+         {
+          "additional_kwargs": {
+           "tool_calls": [
+            {
+             "function": {
+              "arguments": "{\"a\": 17.5, \"b\": 25}",
+              "name": "demo_tools__add_numbers"
+             },
+             "id": "call_DoYverduCamkKPCTLKOpg27K",
+             "type": "function"
+            },
+            {
+             "function": {
+              "arguments": "{\"text\": \"What is 17.5 plus 25?\"}",
+              "name": "demo_tools__count_words"
+             },
+             "id": "call_FBKs7dbHRIvZlUcchgdpDexx",
+             "type": "function"
+            }
+           ]
+          },
+          "content": "",
+          "id": "lc_run--01a12abe-b8cc-7161-9f5a-f4d790b66df2",
+          "name": null,
+          "response_metadata": {
+           "finish_reason": "tool_calls",
+           "model_name": "gpt-4.1-nano-2025-04-14",
+           "model_provider": "openai",
+           "service_tier": "default",
+           "system_fingerprint": "fp_db27b144de"
+          },
+          "type": "ai"
+         }
+        ]
+       },
+       "extra": null,
+       "function_name": "tool",
+       "tool_call_id": "call_01a12abe-be08-7093-b7c3-4ac9aacb3ff3"
+      },
+      {
+       "arguments": {
+        "a": 17.5,
+        "b": 25
+       },
+       "extra": null,
+       "function_name": "demo_tools__add_numbers",
+       "tool_call_id": "call_01a12abe-be08-7093-b7c3-4ad7159df597"
+      },
+      {
+       "arguments": {
+        "text": "What is 17.5 plus 25?"
+       },
+       "extra": null,
+       "function_name": "demo_tools__count_words",
+       "tool_call_id": "call_01a12abe-be09-7791-af62-7150df08a085"
+      },
+      {
+       "arguments": {
+        "a": 17.5,
+        "b": 25.0
+       },
+       "extra": null,
+       "function_name": "demo_tools__add_numbers",
+       "tool_call_id": "call_a0de008a-d22e-4f33-b862-de4fb89b1e96"
+      },
+      {
+       "arguments": {
+        "text": "What is 17.5 plus 25?"
+       },
+       "extra": null,
+       "function_name": "demo_tools__count_words",
+       "tool_call_id": "call_84969472-0447-49f8-a75a-964334960484"
+      },
+      {
+       "arguments": {
+        "input": ""
+       },
+       "extra": null,
+       "function_name": "PromptPassthrough",
+       "tool_call_id": "call_01a12abe-be18-7490-a949-4ee6dcd6f52d"
+      }
+     ]
+    },
+    {
+     "extra": {
+      "ancestry": {
+       "function_id": "7d2c0105-42c7-44ce-9ac6-79c0374560d7",
+       "function_name": "<workflow>",
+       "parent_id": "root",
+       "parent_name": "root"
+      },
+      "invocation": {
+       "end_timestamp": 1791718506.88753,
+       "framework": "langchain",
+       "start_timestamp": 1791718506.009568,
+       "status": "completed"
+      },
+      "tool_ancestry": [
+       {
+        "function_id": "7d2c0105-42c7-44ce-9ac6-79c0374560d7",
+        "function_name": "<workflow>",
+        "parent_id": "root",
+        "parent_name": "root"
+       },
+       {
+        "function_id": "7d2c0105-42c7-44ce-9ac6-79c0374560d7",
+        "function_name": "<workflow>",
+        "parent_id": "root",
+        "parent_name": "root"
+       },
+       {
+        "function_id": "7d2c0105-42c7-44ce-9ac6-79c0374560d7",
+        "function_name": "<workflow>",
+        "parent_id": "root",
+        "parent_name": "root"
+       },
+       {
+        "function_id": "7d2c0105-42c7-44ce-9ac6-79c0374560d7",
+        "function_name": "<workflow>",
+        "parent_id": "root",
+        "parent_name": "root"
+       }
+      ],
+      "tool_invocations": [
+       {
+        "end_timestamp": 1791718506.8912902,
+        "framework": "langchain",
+        "invocation_id": "call_01a12abe-b8ca-71b2-9322-9ed9013087c5",
+        "start_timestamp": 1791718504.6501498,
+        "status": "completed"
+       },
+       {
+        "end_timestamp": 1791718506.890375,
+        "framework": "langchain",
+        "invocation_id": "call_01a12abe-be17-7f03-81d1-1095d05a6b66",
+        "start_timestamp": 1791718506.007941,
+        "status": "completed"
+       },
+       {
+        "end_timestamp": 1791718506.88802,
+        "framework": "langchain",
+        "invocation_id": "call_01a12abe-be18-7490-a949-4edc647f64c8",
+        "start_timestamp": 1791718506.0083158,
+        "status": "completed"
+       },
+       {
+        "end_timestamp": 1791718506.889911,
+        "framework": "langchain",
+        "invocation_id": "call_01a12abe-c189-7430-8dac-9b310c566eb8",
+        "start_timestamp": 1791718506.8892548,
+        "status": "completed"
+       }
+      ]
+     },
+     "is_copied_context": null,
+     "llm_call_count": null,
+     "message": "The sum of 17.5 and 25 is 42.5. The question contains 5 words.",
+     "metrics": {
+      "cached_tokens": null,
+      "completion_token_ids": null,
+      "completion_tokens": 24,
+      "cost_usd": null,
+      "extra": null,
+      "logprobs": null,
+      "prompt_token_ids": null,
+      "prompt_tokens": 223
+     },
+     "model_name": "gpt-4.1-nano",
+     "observation": {
+      "results": [
+       {
+        "content": "{'messages': [{'content': 'What is 17.5 plus 25? Use the tools.', 'additional_kwargs': {}, 'response_metadata': {}, 'type': 'human', 'name': None, 'id': None}, {'content': '', 'additional_kwargs': {'tool_calls': [{'type': 'function', 'id': 'call_DoYverduCamkKPCTLKOpg27K', 'function': {'name': 'demo_tools__add_numbers', 'arguments': '{\"a\": 17.5, \"b\": 25}'}}, {'type': 'function', 'id': 'call_FBKs7dbHRIvZlUcchgdpDexx', 'function': {'name': 'demo_tools__count_words', 'arguments': '{\"text\": \"What is 17.5 plus 25?\"}'}}]}, 'response_metadata': {'model_provider': 'openai', 'finish_reason': 'tool_calls', 'model_name': 'gpt-4.1-nano-2025-04-14', 'system_fingerprint': 'fp_db27b144de', 'service_tier': 'default'}, 'type': 'ai', 'name': None, 'id': 'lc_run--01a12abe-b8cc-7161-9f5a-f4d790b66df2', 'tool_calls': [{'name': 'demo_tools__add_numbers', 'args': {'a': 17.5, 'b': 25}, 'id': 'call_DoYverduCamkKPCTLKOpg27K', 'type': 'tool_call'}, {'name': 'demo_tools__count_words', 'args': {'text': 'What is 17.5 plus 25?'}, 'id': 'call_FBKs7dbHRIvZlUcchgdpDexx', 'type': 'tool_call'}], 'invalid_tool_calls': [], 'usage_metadata': {'input_tokens': 140, 'output_tokens': 65, 'total_tokens': 205, 'input_token_details': {'audio': 0, 'cache_read': 0}, 'output_token_details': {'audio': 0, 'reasoning': 0}}}, {'content': '42.5', 'additional_kwargs': {}, 'response_metadata': {}, 'type': 'tool', 'name': 'demo_tools__add_numbers', 'id': None, 'tool_call_id': 'call_DoYverduCamkKPCTLKOpg27K', 'artifact': None, 'status': 'success'}, {'content': '5', 'additional_kwargs': {}, 'response_metadata': {}, 'type': 'tool', 'name': 'demo_tools__count_words', 'id': None, 'tool_call_id': 'call_FBKs7dbHRIvZlUcchgdpDexx', 'artifact': None, 'status': 'success'}, {'content': 'The sum of 17.5 and 25 is 42.5. The question contains 5 words.', 'additional_kwargs': {}, 'response_metadata': {'model_provider': 'openai', 'finish_reason': 'stop', 'model_name': 'gpt-4.1-nano-2025-04-14', 'system_fingerprint': 'fp_db27b144de', 'service_tier': 'default'}, 'type': 'ai', 'name': None, 'id': 'lc_run--01a12abe-be19-7e20-b667-8854107a9320', 'tool_calls': [], 'invalid_tool_calls': [], 'usage_metadata': {'input_tokens': 223, 'output_tokens': 24, 'total_tokens': 247, 'input_token_details': {'audio': 0, 'cache_read': 0}, 'output_token_details': {'audio': 0, 'reasoning': 0}}}]}",
+        "extra": null,
+        "source_call_id": "call_01a12abe-b8ca-71b2-9322-9ed9013087c5",
+        "subagent_trajectory_ref": null
+       },
+       {
+        "content": "{'messages': [{'content': 'What is 17.5 plus 25? Use the tools.', 'additional_kwargs': {}, 'response_metadata': {}, 'type': 'human', 'name': None, 'id': None}, {'content': '', 'additional_kwargs': {'tool_calls': [{'type': 'function', 'id': 'call_DoYverduCamkKPCTLKOpg27K', 'function': {'name': 'demo_tools__add_numbers', 'arguments': '{\"a\": 17.5, \"b\": 25}'}}, {'type': 'function', 'id': 'call_FBKs7dbHRIvZlUcchgdpDexx', 'function': {'name': 'demo_tools__count_words', 'arguments': '{\"text\": \"What is 17.5 plus 25?\"}'}}]}, 'response_metadata': {'model_provider': 'openai', 'finish_reason': 'tool_calls', 'model_name': 'gpt-4.1-nano-2025-04-14', 'system_fingerprint': 'fp_db27b144de', 'service_tier': 'default'}, 'type': 'ai', 'name': None, 'id': 'lc_run--01a12abe-b8cc-7161-9f5a-f4d790b66df2'}, {'content': '42.5', 'additional_kwargs': {}, 'response_metadata': {}, 'type': 'tool', 'name': 'demo_tools__add_numbers', 'id': None}, {'content': '5', 'additional_kwargs': {}, 'response_metadata': {}, 'type': 'tool', 'name': 'demo_tools__count_words', 'id': None}, {'content': 'The sum of 17.5 and 25 is 42.5. The question contains 5 words.', 'additional_kwargs': {}, 'response_metadata': {'model_provider': 'openai', 'finish_reason': 'stop', 'model_name': 'gpt-4.1-nano-2025-04-14', 'system_fingerprint': 'fp_db27b144de', 'service_tier': 'default'}, 'type': 'ai', 'name': None, 'id': 'lc_run--01a12abe-be19-7e20-b667-8854107a9320'}]}",
+        "extra": null,
+        "source_call_id": "call_01a12abe-be17-7f03-81d1-1095d05a6b66",
+        "subagent_trajectory_ref": null
+       },
+       {
+        "content": "{'content': 'The sum of 17.5 and 25 is 42.5. The question contains 5 words.', 'additional_kwargs': {}, 'response_metadata': {'model_provider': 'openai', 'finish_reason': 'stop', 'model_name': 'gpt-4.1-nano-2025-04-14', 'system_fingerprint': 'fp_db27b144de', 'service_tier': 'default'}, 'type': 'AIMessageChunk', 'name': None, 'id': 'lc_run--01a12abe-be19-7e20-b667-8854107a9320', 'tool_calls': [], 'invalid_tool_calls': [], 'usage_metadata': {'input_tokens': 223, 'output_tokens': 24, 'total_tokens': 247, 'input_token_details': {'audio': 0, 'cache_read': 0}, 'output_token_details': {'audio': 0, 'reasoning': 0}}, 'tool_call_chunks': [], 'chunk_position': 'last'}",
+        "extra": null,
+        "source_call_id": "call_01a12abe-be18-7490-a949-4edc647f64c8",
+        "subagent_trajectory_ref": null
+       },
+       {
+        "content": "AgentDecision.END",
+        "extra": null,
+        "source_call_id": "call_01a12abe-c189-7430-8dac-9b310c566eb8",
+        "subagent_trajectory_ref": null
+       }
+      ]
+     },
+     "reasoning_content": null,
+     "reasoning_effort": null,
+     "source": "agent",
+     "step_id": 4,
+     "timestamp": "2026-10-11T11:35:06.887530+00:00",
+     "tool_calls": [
+      {
+       "arguments": {
+        "messages": [
+         {
+          "additional_kwargs": {},
+          "content": "What is 17.5 plus 25? Use the tools.",
+          "id": null,
+          "name": null,
+          "response_metadata": {},
+          "type": "human"
+         }
+        ]
+       },
+       "extra": null,
+       "function_name": "LangGraph",
+       "tool_call_id": "call_01a12abe-b8ca-71b2-9322-9ed9013087c5"
+      },
+      {
+       "arguments": {
+        "messages": [
+         {
+          "additional_kwargs": {},
+          "content": "What is 17.5 plus 25? Use the tools.",
+          "id": null,
+          "name": null,
+          "response_metadata": {},
+          "type": "human"
+         },
+         {
+          "additional_kwargs": {
+           "tool_calls": [
+            {
+             "function": {
+              "arguments": "{\"a\": 17.5, \"b\": 25}",
+              "name": "demo_tools__add_numbers"
+             },
+             "id": "call_DoYverduCamkKPCTLKOpg27K",
+             "type": "function"
+            },
+            {
+             "function": {
+              "arguments": "{\"text\": \"What is 17.5 plus 25?\"}",
+              "name": "demo_tools__count_words"
+             },
+             "id": "call_FBKs7dbHRIvZlUcchgdpDexx",
+             "type": "function"
+            }
+           ]
+          },
+          "content": "",
+          "id": "lc_run--01a12abe-b8cc-7161-9f5a-f4d790b66df2",
+          "name": null,
+          "response_metadata": {
+           "finish_reason": "tool_calls",
+           "model_name": "gpt-4.1-nano-2025-04-14",
+           "model_provider": "openai",
+           "service_tier": "default",
+           "system_fingerprint": "fp_db27b144de"
+          },
+          "type": "ai"
+         },
+         {
+          "additional_kwargs": {},
+          "content": "42.5",
+          "id": null,
+          "name": "demo_tools__add_numbers",
+          "response_metadata": {},
+          "type": "tool"
+         },
+         {
+          "additional_kwargs": {},
+          "content": "5",
+          "id": null,
+          "name": "demo_tools__count_words",
+          "response_metadata": {},
+          "type": "tool"
+         }
+        ]
+       },
+       "extra": null,
+       "function_name": "agent",
+       "tool_call_id": "call_01a12abe-be17-7f03-81d1-1095d05a6b66"
+      },
+      {
+       "arguments": {
+        "input": ""
+       },
+       "extra": null,
+       "function_name": "RunnableSequence",
+       "tool_call_id": "call_01a12abe-be18-7490-a949-4edc647f64c8"
+      },
+      {
+       "arguments": {
+        "messages": [
+         {
+          "additional_kwargs": {},
+          "content": "What is 17.5 plus 25? Use the tools.",
+          "id": null,
+          "name": null,
+          "response_metadata": {},
+          "type": "human"
+         },
+         {
+          "additional_kwargs": {
+           "tool_calls": [
+            {
+             "function": {
+              "arguments": "{\"a\": 17.5, \"b\": 25}",
+              "name": "demo_tools__add_numbers"
+             },
+             "id": "call_DoYverduCamkKPCTLKOpg27K",
+             "type": "function"
+            },
+            {
+             "function": {
+              "arguments": "{\"text\": \"What is 17.5 plus 25?\"}",
+              "name": "demo_tools__count_words"
+             },
+             "id": "call_FBKs7dbHRIvZlUcchgdpDexx",
+             "type": "function"
+            }
+           ]
+          },
+          "content": "",
+          "id": "lc_run--01a12abe-b8cc-7161-9f5a-f4d790b66df2",
+          "name": null,
+          "response_metadata": {
+           "finish_reason": "tool_calls",
+           "model_name": "gpt-4.1-nano-2025-04-14",
+           "model_provider": "openai",
+           "service_tier": "default",
+           "system_fingerprint": "fp_db27b144de"
+          },
+          "type": "ai"
+         },
+         {
+          "additional_kwargs": {},
+          "content": "42.5",
+          "id": null,
+          "name": "demo_tools__add_numbers",
+          "response_metadata": {},
+          "type": "tool"
+         },
+         {
+          "additional_kwargs": {},
+          "content": "5",
+          "id": null,
+          "name": "demo_tools__count_words",
+          "response_metadata": {},
+          "type": "tool"
+         },
+         {
+          "additional_kwargs": {},
+          "content": "The sum of 17.5 and 25 is 42.5. The question contains 5 words.",
+          "id": "lc_run--01a12abe-be19-7e20-b667-8854107a9320",
+          "name": null,
+          "response_metadata": {
+           "finish_reason": "stop",
+           "model_name": "gpt-4.1-nano-2025-04-14",
+           "model_provider": "openai",
+           "service_tier": "default",
+           "system_fingerprint": "fp_db27b144de"
+          },
+          "type": "ai"
+         }
+        ]
+       },
+       "extra": null,
+       "function_name": "conditional_edge",
+       "tool_call_id": "call_01a12abe-c189-7430-8dac-9b310c566eb8"
+      }
+     ]
+    },
+    {
+     "extra": {
+      "ancestry": {
+       "function_id": "root",
+       "function_name": "root"
+      },
+      "invocation": {
+       "status": "completed"
+      }
+     },
+     "is_copied_context": null,
+     "llm_call_count": null,
+     "message": "The sum of 17.5 and 25 is 42.5. The question contains 5 words.",
+     "metrics": null,
+     "model_name": null,
+     "observation": null,
+     "reasoning_content": null,
+     "reasoning_effort": null,
+     "source": "agent",
+     "step_id": 5,
+     "timestamp": "2026-10-11T11:35:06.891630+00:00",
+     "tool_calls": null
+    }
+   ],
+   "subagent_trajectories": null,
+   "trajectory_id": null
+  }
+ }
+]

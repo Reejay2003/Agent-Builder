@@ -1,0 +1,182 @@
+{
+ "agent": {
+  "model_name": "gpt-4.1-mini",
+  "name": "calc-helper",
+  "version": "0.9.4"
+ },
+ "extra": {
+  "nemo_relay": {
+   "session_instance_id": "01a1ac3a-1198-7de3-ae79-b085a89300d8"
+  }
+ },
+ "final_metrics": {
+  "total_completion_tokens": 40,
+  "total_prompt_tokens": 1118,
+  "total_steps": 4
+ },
+ "schema_version": "ATIF-v1.7",
+ "session_id": "01a1ac3a-1198-7de3-ae79-b085a89300d8",
+ "steps": [
+  {
+   "extra": {
+    "ancestry": {
+     "function_id": "01a1ac3a-119c-7a92-8218-ba6465fe357e",
+     "function_name": "nat-llm",
+     "parent_id": "01a1ac3a-1198-7de3-ae79-b085a89300d8",
+     "parent_name": "nat-request"
+    },
+    "llm_request": {
+     "input": {
+      "chat_history": "",
+      "question": "demo question"
+     },
+     "model": "gpt-4.1-mini"
+    }
+   },
+   "message": "{\"input\":{\"chat_history\":\"\",\"question\":\"demo question\"},\"model\":\"gpt-4.1-mini\"}",
+   "source": "user",
+   "step_id": 1,
+   "timestamp": "2026-11-05T15:00:49.180580+00:00"
+  },
+  {
+   "extra": {
+    "ancestry": {
+     "function_id": "01a1ac3a-119c-7a92-8218-ba6465fe357e",
+     "function_name": "nat-llm",
+     "parent_id": "01a1ac3a-1198-7de3-ae79-b085a89300d8",
+     "parent_name": "nat-request"
+    },
+    "invocation": {
+     "end_timestamp": 1793890849.23,
+     "framework": "nemo_relay",
+     "invocation_id": "01a1ac3a-119c-7a92-8218-ba6465fe357e",
+     "start_timestamp": 1793890849.18,
+     "status": "completed"
+    },
+    "llm_response": {
+     "content": "Thought: I should use a tool.\nAction: demo__add_numbers\nAction Input: {\"a\": 17.5, \"b\": 25}"
+    },
+    "tool_ancestry": [
+     {
+      "function_id": "01a1ac3a-11d1-7043-98dc-10d0161baebb",
+      "function_name": "demo__add_numbers",
+      "parent_id": "01a1ac3a-1198-7de3-ae79-b085a89300d8",
+      "parent_name": "nat-request"
+     }
+    ],
+    "tool_invocations": [
+     {
+      "end_timestamp": 1793890849.242,
+      "framework": "nemo_relay",
+      "invocation_id": "01a1ac3a-11d1-7043-98dc-10d0161baebb",
+      "start_timestamp": 1793890849.233,
+      "status": "completed"
+     }
+    ]
+   },
+   "llm_call_count": 1,
+   "message": "Thought: I should use a tool.\nAction: demo__add_numbers\nAction Input: {\"a\": 17.5, \"b\": 25}",
+   "metrics": {
+    "completion_tokens": 22,
+    "prompt_tokens": 538
+   },
+   "model_name": "gpt-4.1-mini",
+   "observation": {
+    "results": [
+     {
+      "extra": {
+       "event_name": "demo__add_numbers",
+       "event_uuid": "01a1ac3a-11d1-7043-98dc-10d0161baebb",
+       "parent_event_uuid": "01a1ac3a-1198-7de3-ae79-b085a89300d8",
+       "tool_result": {
+        "content": "42.5",
+        "status": "success"
+       }
+      },
+      "source_call_id": "01a1ac3a-11d1-7043-98dc-10d0161baebb"
+     }
+    ]
+   },
+   "source": "agent",
+   "step_id": 2,
+   "timestamp": "2026-11-05T15:00:49.230783+00:00",
+   "tool_calls": [
+    {
+     "arguments": {
+      "a": 17.5,
+      "b": 25
+     },
+     "extra": {
+      "event_name": "demo__add_numbers",
+      "event_uuid": "01a1ac3a-11d1-7043-98dc-10d0161baebb",
+      "parent_event_uuid": "01a1ac3a-1198-7de3-ae79-b085a89300d8"
+     },
+     "function_name": "demo__add_numbers",
+     "tool_call_id": "01a1ac3a-11d1-7043-98dc-10d0161baebb"
+    }
+   ]
+  },
+  {
+   "extra": {
+    "ancestry": {
+     "function_id": "01a1ac3a-11db-7f81-a5d1-f415e785212a",
+     "function_name": "nat-llm",
+     "parent_id": "01a1ac3a-1198-7de3-ae79-b085a89300d8",
+     "parent_name": "nat-request"
+    },
+    "llm_request": {
+     "input": {
+      "agent_scratchpad": [
+       {
+        "content": "Thought: I should use a tool.\nAction: demo__add_numbers\nAction Input: {\"a\": 17.5, \"b\": 25}",
+        "type": "ai"
+       },
+       {
+        "content": "42.5",
+        "type": "human"
+       }
+      ],
+      "chat_history": "",
+      "question": "demo question"
+     },
+     "model": "gpt-4.1-mini"
+    }
+   },
+   "message": "{\"input\":{\"agent_scratchpad\":[{\"content\":\"Thought: I should use a tool.\\nAction: demo__add_numbers\\nAction Input: {\\\"a\\\": 17.5, \\\"b\\\": 25}\",\"type\":\"ai\"},{\"content\":\"42.5\",\"type\":\"human\"}],\"chat_history\":\"\",\"question\":\"demo question\"},\"model\":\"gpt-4.1-mini\"}",
+   "source": "user",
+   "step_id": 3,
+   "timestamp": "2026-11-05T15:00:49.243670+00:00"
+  },
+  {
+   "extra": {
+    "ancestry": {
+     "function_id": "01a1ac3a-11db-7f81-a5d1-f415e785212a",
+     "function_name": "nat-llm",
+     "parent_id": "01a1ac3a-1198-7de3-ae79-b085a89300d8",
+     "parent_name": "nat-request"
+    },
+    "invocation": {
+     "end_timestamp": 1793890849.25,
+     "framework": "nemo_relay",
+     "invocation_id": "01a1ac3a-11db-7f81-a5d1-f415e785212a",
+     "start_timestamp": 1793890849.243,
+     "status": "completed"
+    },
+    "llm_response": {
+     "content": "Thought: I now know the final answer\nFinal Answer: 17.5 plus 25 is 42.5."
+    }
+   },
+   "llm_call_count": 1,
+   "message": "Thought: I now know the final answer\nFinal Answer: 17.5 plus 25 is 42.5.",
+   "metrics": {
+    "completion_tokens": 18,
+    "prompt_tokens": 580
+   },
+   "model_name": "gpt-4.1-mini",
+   "source": "agent",
+   "step_id": 4,
+   "timestamp": "2026-11-05T15:00:49.250828+00:00"
+  }
+ ],
+ "trajectory_id": "01a1ac3a-1198-7de3-ae79-b085a89300d8"
+}

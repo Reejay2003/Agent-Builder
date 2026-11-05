@@ -4,8 +4,15 @@ from agentbuilder.compile.compiled import CompiledAgent, CompiledModel, Compiled
 from agentbuilder.compile.compiler import CompileError, compile_agent
 from agentbuilder.compile.fabric_config import TARGET_ID, to_fabric_config
 from agentbuilder.compile.nat_workflow import to_nat_workflow, to_nat_yaml
+from agentbuilder.compile.sandbox_policy import (
+    DEFAULT_BINARIES,
+    to_openshell_policy,
+    to_openshell_provider_profile,
+    to_openshell_yaml,
+)
 
 __all__ = [
+    "DEFAULT_BINARIES",
     "TARGET_ID",
     "CompileError",
     "CompiledAgent",
@@ -15,4 +22,7 @@ __all__ = [
     "to_fabric_config",
     "to_nat_workflow",
     "to_nat_yaml",
+    "to_openshell_policy",
+    "to_openshell_provider_profile",
+    "to_openshell_yaml",
 ]
