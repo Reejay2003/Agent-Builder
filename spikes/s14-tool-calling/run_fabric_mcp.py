@@ -3,8 +3,8 @@ import asyncio, json, os, sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-S2 = ROOT / "services" / "runner" / "nat_adapter"  # our NAT adapter
-sys.path.insert(0, str(S2 / "src"))
+S2 = ROOT / "packages" / "sdk-nat" / "src" / "agentbuilder_nat" / "adapter"  # our NAT adapter
+sys.path.insert(0, str(ROOT / "packages" / "sdk-nat" / "src"))
 from nemo_fabric import (DiscoveryConfig, Fabric, FabricConfig, MetadataConfig, ModelConfig,
                          RuntimeConfig, WorkflowConfig)
 
@@ -34,7 +34,7 @@ def build_config() -> FabricConfig:
 
 
 async def main():
-    base = S2 / ".tmp"; base.mkdir(exist_ok=True)
+    base = ROOT / "spikes" / ".tmp"; base.mkdir(exist_ok=True)
     out = await Fabric().run(build_config(), base_dir=base, input=sys.argv[1])
     print(json.dumps(out.to_mapping(), default=str))
 

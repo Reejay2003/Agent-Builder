@@ -1,0 +1,49 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agentbuilder-nat"
+version = "0.1.0.dev0"
+description = "Runs Agent Builder agents locally on NVIDIA NeMo Agent Toolkit through NeMo Fabric, with NeMo Relay trajectories."
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+license = "Apache-2.0"
+license-files = ["LICENSE", "LICENSE-NVIDIA-Fabric"]
+authors = [{ name = "Agent Builder contributors" }]
+classifiers = [
+  "Development Status :: 2 - Pre-Alpha",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+]
+# Pins are the versions verified together (COMPLETED.md). Do not use --prerelease: it pulls Fabric 0.5.0b3.
+dependencies = [
+  "agentbuilder>=0.1.0.dev0",
+  "nvidia-nat-core==1.9.0",
+  "nvidia-nat-langchain==1.9.0",
+  "nvidia-nat-mcp==1.9.0",
+  "nemo-fabric==0.4.0",
+  "nemo-fabric-adapter-contract==0.4.0",
+  "nemo-fabric-adapters-common==0.4.0",
+  "nemo-relay==0.9.4",
+]
+
+[project.entry-points."agentbuilder.runners"]
+local = "agentbuilder_nat.local:LocalRunner"
+
+[project.urls]
+Repository = "https://github.com/Reejay2003/Agent-Builder"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agentbuilder_nat", "src/nemo_fabric_adapters"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+extend-exclude = ["src/nemo_fabric_adapters"]  # adapted from NVIDIA's code; keep its style so upstream diffs stay readable
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-W ignore"

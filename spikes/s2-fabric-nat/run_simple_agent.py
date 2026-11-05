@@ -11,8 +11,8 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 ROOT = HERE.parents[1]
-ADAPTER = ROOT / "services" / "runner" / "nat_adapter"  # our NAT adapter (moved out of spikes/)
-sys.path.insert(0, str(ADAPTER / "src"))
+ADAPTER = ROOT / "packages" / "sdk-nat" / "src" / "agentbuilder_nat" / "adapter"  # our NAT adapter (moved out of spikes/)
+sys.path.insert(0, str(ROOT / "packages" / "sdk-nat" / "src"))
 
 from nemo_fabric import (DiscoveryConfig, Fabric, FabricConfig, MetadataConfig, ModelConfig,
                          RuntimeConfig, WorkflowConfig)
@@ -46,7 +46,7 @@ async def main():
     p.add_argument("--doctor", action="store_true")
     p.add_argument("--input", default="Who created Python, and what is the date today?")
     a = p.parse_args()
-    base = ADAPTER / ".tmp"; base.mkdir(exist_ok=True)
+    base = ROOT / "spikes" / ".tmp"; base.mkdir(exist_ok=True)
     fabric, cfg = Fabric(), build_config()
     if a.doctor:
         out = await fabric.doctor(cfg, base_dir=base)

@@ -812,8 +812,37 @@ Sandbox and approvals (v0.3): `Agent(..., sandbox="openshell", approve=callback)
 - **Roles:** the browser UI edits AgentSpecs (the same files the Python API reads and writes), manages model connections, and starts runs; the SDK compiles and runs them (`LocalRunner`, later the sandbox runner) and returns a `RunResult` with the trajectory for the trace view.
 - **Contract:** the UI writes specs through the SDK's JSON Schema (no hand-rolled YAML), with `agent_mode: auto` and `credential_ref: secret://modelcfg/<id>/api_key`.
 - **Keys:** the web vault (AES-256-GCM per-user key, wrapped by the login password) is a `SecretStore` for `secret://modelcfg/...`. In sandbox runs the runner turns the resolved key into an OpenShell provider (`spikes/s3-openshell/part 4`), so the agent only ever sees a placeholder.
-- **Local API (to build):** a small localhost service in front of the SDK (`POST /api/runs`, `GET /api/runs/:id`, `POST /api/compile`), started by `ab ui` next to the web server; the UI never imports Python. Until it exists the UI can only author and test model connections.
+- **Local API (built 2026-11-05, `agentbuilder.server`):** a small standard-library server on `127.0.0.1` in front of the SDK, started by `ab ui` next to the web server; the UI never imports Python. The contract is below (section 16.13).
 - **Limits:** single user, localhost only; the vault must be unlocked to run (no unattended runs); the packaged-UI and auto-update story is open.
+
+### 16.13 The local API contract (SDK server <-> web app)
+Everything is JSON over HTTP on loopback. Errors always have one shape: `{"ok": false, "errors": [{"field": "model.credential_ref", "message": "..."}]}` (`field` is `""` when it is not about one field).
+
+**Who calls whom.** The web app's *server side* (Next.js route handlers) calls the SDK server; the browser never does, so the token stays on the server. `ab ui` starts both and gives the web app three environment variables, new at every start:
+
+| Variable | Meaning |
+|---|---|
+| `AGENTBUILDER_API_URL` | where the SDK server listens, for example `http://127.0.0.1:53211` |
+| `AGENTBUILDER_API_TOKEN` | send as header `X-AgentBuilder-Token` on every call to the SDK server |
+| `AGENTBUILDER_VAULT_TOKEN` | the SDK server sends this same header name when it asks the web app for a key; the web app must check it |
+
+**SDK server endpoints** (all need the token header; a wrong `Host`, or any request with an `Origin` header, is refused with 403; wrong token is 401):
+
+| Call | Body | Answer |
+|---|---|---|
+| `GET /health` | none | `{"ok": true, "version": "...", "runner": "ready" \| "not installed"}` |
+| `GET /tools` | none | `{"tools": [{"id", "description", "risk_tier" 0-3, "side_effects", "egress_hosts", "input_schema"}]}` for the tool basket |
+| `POST /spec/validate` | `{"spec": {...AgentSpec as JSON...}}` | 200 `{"ok": true, "spec_yaml": "...", "agent_mode": "tool_calling" \| "react", "tools": [...], "warnings": [...]}`; 422 with field errors. The SDK writes the YAML; the UI must not |
+| `POST /runs` | `{"spec": {...}, "prompt": "..."}` | 202 `{"run_id": "..."}`; 422 on a bad spec or empty prompt. The run happens in the background |
+| `GET /runs/{id}` | none | `{"run_id", "status": "running" \| "succeeded" \| "failed", "text", "error", "warnings": [], "trace"}`; `trace` is `null` until finished, then `{"model", "tools_used": [], "tokens": {"prompt", "completion", "total"}, "steps": [{"id", "source", "model", "text", "tokens", "tool_calls": [{"name", "arguments", "result", "status"}]}]}`. Poll about once a second |
+
+**The spec the UI sends** uses the SDK schema (`packages/sdk/agent-spec.schema.json`): `model.credential_ref` is `secret://modelcfg/<id>/api_key`, `model.agent_mode` is `auto`, and there are no `config_id` or `verify_ssl` fields (TLS verification is never a per-agent switch; a UI-only id stays in the UI's own database).
+
+**The one endpoint the web app must provide** (the SDK server calls it to fetch a stored key when a run starts):
+
+`GET /api/internal/secrets/<name>` where `<name>` is the part after `secret://`, for example `modelcfg/3/api_key`. Header `X-AgentBuilder-Token` must equal `AGENTBUILDER_VAULT_TOKEN` (compare in constant time). Answers: 200 `{"value": "<the key>"}`; 404 unknown name; 423 the vault is locked (nobody is signed in or it was not unlocked); 401 wrong token. Never log the value; serve only on loopback. The SDK shows a locked vault to the user as "sign in to the web app and unlock it, then retry".
+
+**Limits.** One user, one machine. Runs are kept in memory (the last 50) and are lost when `ab ui` stops. One run at a time per process uses the model key (runs are serialised inside the runner). The first version starts the web app with `next dev`; a production build is a later task.
 
 ## 17. Reference links
 - NeMo Agent Toolkit: https://github.com/NVIDIA/NeMo-Agent-Toolkit

@@ -9,7 +9,7 @@ from agentbuilder.compile import compile_agent, to_fabric_config
 from agentbuilder.spec import AgentSpec
 
 ROOT = Path(__file__).resolve().parents[4]
-ADAPTER = ROOT / "services" / "runner" / "nat_adapter"
+ADAPTER = ROOT / "packages" / "sdk-nat" / "src" / "agentbuilder_nat" / "adapter"
 pytestmark = [pytest.mark.nat, pytest.mark.skipif(not ADAPTER.exists(), reason="needs the repository checkout")]
 
 
@@ -24,7 +24,7 @@ def _plan(model: dict, tmp_path):
 
 def test_nvidia_hosted_becomes_a_nim_llm_in_nat(tmp_path, monkeypatch):
     plan = _plan({"provider": "nvidia_hosted", "model": "nvidia/m", "credential_ref": "env://NVIDIA_API_KEY"}, tmp_path)
-    monkeypatch.syspath_prepend(str(ADAPTER / "src"))
+    monkeypatch.syspath_prepend(str(ROOT / "packages" / "sdk-nat" / "src"))
     monkeypatch.setenv("NVIDIA_API_KEY", "fake-key")
     from nemo_fabric_adapter_contract.models import AgentConfig
     from nemo_fabric_adapters.nat.adapter import build_nat_config_mapping

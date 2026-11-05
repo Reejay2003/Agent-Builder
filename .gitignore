@@ -19,3 +19,4 @@ third_party/
 dist/
 build/
 *.egg-info/
+.tmp/

@@ -31,7 +31,7 @@ jobs:
       - run: ruff format --check .
       - run: mypy
       # Offline tests only: no API key, no NVIDIA stack, no cost. The `nat` marker needs the full repo setup.
-      - run: python -m pytest -m "not nat"
+      - run: python -m pytest -m "not nat and not openshell"
 
   clean-install:
     name: wheel installs in an empty environment and imports without NVIDIA packages

@@ -2,7 +2,7 @@
 
 The core SDK does not import Fabric (an NVIDIA 0.x package); the runner package validates the mapping with
 `nemo_fabric.FabricConfig.model_validate(mapping)`. Targets name the workflow our adapter builds
-(services/runner/nat_adapter/targets): ReAct and tool calling."""
+(packages/sdk-nat, agentbuilder_nat/adapter/targets): ReAct and tool calling."""
 
 from __future__ import annotations
 

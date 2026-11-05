@@ -27,15 +27,18 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-mcp = ["mcp>=1.2"]
+mcp = ["mcp>=1.2,<2"]
 dev = [
-  "mcp>=1.2",
+  "mcp>=1.2,<2",
   "pytest>=8",
   "ruff>=0.6",
   "mypy>=1.10",
   "types-PyYAML",
   "jsonschema>=4.20",
 ]
+
+[project.scripts]
+ab = "agentbuilder.cli:main"
 
 [project.urls]
 Repository = "https://github.com/Reejay2003/Agent-Builder"

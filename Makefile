@@ -49,17 +49,18 @@ sdk-check:  ## SDK: ruff, format, mypy --strict and offline tests (no key, no co
 sdk-test-openshell:  ## SDK: generated sandbox policy on a real OpenShell microVM (needs Docker + gateway; no key, no cost)
 	. .venv/bin/activate; cd packages/sdk && python -m pytest -q -m openshell -W ignore
 
-sdk-test-nat:  ## SDK: real NAT agents against the fake OpenAI server (needs the full setup; no key, no cost)
+sdk-test-nat:  ## SDK + LocalRunner: real NAT agents against the fake OpenAI server (needs the full setup; no key, no cost)
 	. .venv/bin/activate; cd packages/sdk && python -m pytest -q -m nat -W ignore
+	. .venv/bin/activate; cd packages/sdk-nat && ruff check . && python -m pytest -q
 
 test:  ## offline tests for our adapter additions (no LLM, no cost)
-	$(RUN_ENV); python services/runner/nat_adapter/test_adapter_patches.py
+	$(RUN_ENV); python packages/sdk-nat/tests/test_adapter_patches.py
 
 eval:  ## NAT eval with ATIF output: make eval KIND=react|tool_calling REPS=3 MODEL=gpt-4.1-mini (costs LLM calls)
 	$(RUN_ENV); export JUDGE_MODEL=$${JUDGE_MODEL:-$${LLM_MODEL}}; $${MODEL:+export LLM_MODEL=$$MODEL;} nat eval --config_file spikes/s4-relay-eval/eval-$${KIND:-tool_calling}.yml --reps=$${REPS:-1}; python spikes/s4-relay-eval/summarize.py spikes/s4-relay-eval/out/$${KIND:-tool_calling}
 
 fabric-agent:  ## run the same agent through Fabric (ARGS=--plan or --doctor skips the LLM call)
-	$(RUN_ENV); export PYTHONPATH="$$PWD/services/runner/nat_adapter/src"; python spikes/s2-fabric-nat/run_simple_agent.py $(ARGS)
+	$(RUN_ENV); export PYTHONPATH="$$PWD/packages/sdk-nat/src"; python spikes/s2-fabric-nat/run_simple_agent.py $(ARGS)
 
 fabric-doctor:  ## Fabric pre-flight check (no LLM call)
 	$(MAKE) fabric-agent ARGS=--doctor

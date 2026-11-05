@@ -20,11 +20,9 @@ ROOT = SDK.parents[1]
 sys.path[:0] = [
     str(SDK),
     str(ROOT / "packages" / "mcp-tools"),
-    str(ROOT / "services" / "runner" / "nat_adapter" / "src"),
+    str(ROOT / "packages" / "sdk-nat" / "src"),
 ]
-os.environ.update(
-    LLM_API_KEY="fake-key", ADAPTER_PYTHON=sys.executable, PYTHONPATH=str(ROOT / "services/runner/nat_adapter/src")
-)
+os.environ.update(LLM_API_KEY="fake-key", ADAPTER_PYTHON=sys.executable, PYTHONPATH=str(ROOT / "packages/sdk-nat/src"))
 
 import nemo_fabric  # noqa: E402
 from demo_tools import TOOLS  # noqa: E402
@@ -72,7 +70,7 @@ for mode, script in SCRIPTS.items():
         )
         cfg = to_fabric_config(
             compile_agent(spec, catalog),
-            adapter_dir=str(ROOT / "services/runner/nat_adapter"),
+            adapter_dir=str(ROOT / "packages/sdk-nat/src/agentbuilder_nat/adapter"),
             relay_output_dir=str(out),
         )
         result = asyncio.run(

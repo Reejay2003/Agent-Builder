@@ -21,7 +21,7 @@ from agentbuilder.tools import ToolCatalog
 
 ROOT = Path(__file__).resolve().parents[4]
 NAT = shutil.which("nat") or str(ROOT / ".venv" / "bin" / "nat")
-ADAPTER = ROOT / "services" / "runner" / "nat_adapter"
+ADAPTER = ROOT / "packages" / "sdk-nat" / "src" / "agentbuilder_nat" / "adapter"
 SERVER = ROOT / "packages" / "mcp-tools" / "demo_server.py"
 pytestmark = [
     pytest.mark.nat,
@@ -82,7 +82,7 @@ def test_compiled_fabric_config_runs_through_our_adapter(mode, tmp_path, monkeyp
     nemo_fabric = pytest.importorskip("nemo_fabric")
     model, log = FakeModel(script_for(mode)), tmp_path / "tools.jsonl"
     monkeypatch.setenv("LLM_API_KEY", "fake-key")
-    monkeypatch.setenv("PYTHONPATH", str(ADAPTER / "src"))
+    monkeypatch.setenv("PYTHONPATH", str(ROOT / "packages" / "sdk-nat" / "src"))
     monkeypatch.setenv("PATH", f"{Path(sys.executable).parent}:{os.environ['PATH']}")
     # Fabric picks the adapter host's Python from ADAPTER_PYTHON (or VIRTUAL_ENV), NOT from PATH. Without it the host
     # may start under another interpreter and fail with "No module named nemo_fabric_adapters.common".

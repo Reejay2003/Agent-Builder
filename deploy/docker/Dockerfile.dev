@@ -7,5 +7,5 @@ RUN apt-get update && apt-get install -y --no-install-recommends git curl ca-cer
 WORKDIR /workspace
 COPY requirements.lock /tmp/requirements.lock
 RUN pip install --no-cache-dir -r /tmp/requirements.lock
-ENV PYTHONPATH=/workspace/services/runner/nat_adapter/src
+ENV PYTHONPATH=/workspace/packages/sdk-nat/src
 CMD ["bash"]
