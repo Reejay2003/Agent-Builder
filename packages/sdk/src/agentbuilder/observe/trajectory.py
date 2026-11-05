@@ -157,11 +157,15 @@ def from_dict(raw: Mapping[str, Any]) -> Trajectory:
         raise TrajectoryError("trajectory has no 'steps' list")
     agent = raw.get("agent") or {}
     final = raw.get("final_metrics") or {}
+    try:
+        steps = tuple(_flatten(raw))
+    except (ValueError, TypeError, AttributeError) as exc:  # a field of the wrong type, a step that is not an object
+        raise TrajectoryError(f"malformed trajectory ({type(exc).__name__}): {exc}") from exc
     return Trajectory(
         schema_version=version,
         agent_name=agent.get("name"),
         model_name=agent.get("model_name"),
-        steps=tuple(_flatten(raw)),
+        steps=steps,
         reported_prompt_tokens=final.get("total_prompt_tokens"),
         reported_completion_tokens=final.get("total_completion_tokens"),
     )
@@ -178,14 +182,23 @@ def load(path: str | Path) -> Trajectory:
     return from_dict(data)
 
 
-def load_eval(path: str | Path) -> dict[str, Trajectory]:
-    """Load a `nat eval` `workflow_output_atif.json` (a list of items) as {item_id: Trajectory}."""
+def load_eval(path: str | Path) -> dict[str, Trajectory | None]:
+    """Load a `nat eval` `workflow_output_atif.json` (a list of items) as {item_id: Trajectory}.
+
+    An item that has an id but no trajectory (a case that failed before producing one) maps to None, so one failed case
+    does not hide the others. An item without an id, or a repeated id, is an error: results would be lost or merged."""
     try:
         items = json.loads(Path(path).read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise TrajectoryError(f"cannot read {path}: {exc}") from exc
     if not isinstance(items, list):
         raise TrajectoryError(f"{path} is not a `nat eval` item list")
-    return {
-        str(i.get("item_id")): from_dict(i["trajectory"]) for i in items if isinstance(i, Mapping) and "trajectory" in i
-    }
+    out: dict[str, Trajectory | None] = {}
+    for n, item in enumerate(items):
+        if not isinstance(item, Mapping) or item.get("item_id") is None:
+            raise TrajectoryError(f"{path}: item {n} needs an 'item_id'")
+        item_id = str(item["item_id"])
+        if item_id in out:
+            raise TrajectoryError(f"{path}: item_id {item_id!r} appears twice")
+        out[item_id] = from_dict(item["trajectory"]) if item.get("trajectory") else None
+    return out

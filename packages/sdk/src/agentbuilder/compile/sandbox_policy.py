@@ -9,6 +9,11 @@ sandbox and injects it only for the model host and only for the listed binaries 
 Binary paths are those INSIDE the sandbox image, so they are parameters (defaults match our `agentbuilder/s3-agent`
 image). Allowed-binary rules follow process ancestry: a child process inherits its parent's access, so keep shell
 tools out of agents that hold provider access.
+
+Limits: network rules are per SANDBOX, not per tool server. OpenShell matches on the binary, and every tool server and
+the agent itself run the same Python, so any of them can reach every listed host. For real separation between tool
+servers, give each its own sandbox or its own binary. Tool hosts are always port 443 because manifests allow bare host
+names only.
 """
 
 from __future__ import annotations
@@ -87,7 +92,7 @@ def to_openshell_provider_profile(
             "(use host.openshell.internal instead of localhost)"
         )
     return {
-        "id": f"agentbuilder-{_key(c.model.provider).replace('_', '-')}",
+        "id": f"agentbuilder-{_key(f'{c.model.provider}_{host}').replace('_', '-')}",
         "display_name": f"Agent Builder: {c.model.provider}",
         "description": f"Model API for agent '{c.name}'",
         "category": "inference",

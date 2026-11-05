@@ -59,5 +59,8 @@ files = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-markers = ["nat: needs the NVIDIA stack (NAT) installed and the repo checkout; skipped otherwise"]
+markers = [
+    "nat: needs the NVIDIA stack (NAT) installed and the repo checkout; skipped otherwise",
+    "openshell: needs a running OpenShell gateway and the agent-builder/s3-agent image; skipped otherwise",
+]
 addopts = "-ra"

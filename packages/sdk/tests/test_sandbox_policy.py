@@ -91,7 +91,7 @@ def test_provider_profile_describes_how_the_key_is_delivered_without_containing_
         spec_with(["demo.add_numbers"]), demo_catalog(), environ={"OPENAI_API_KEY": "sk-proj-" + "a1B2c3D4" * 5}
     )
     p = to_openshell_provider_profile(c)
-    assert p["id"] == "agentbuilder-openai" and p["credentials"][0]["env_vars"] == ["OPENAI_API_KEY"]
+    assert p["id"] == "agentbuilder-openai-api-openai-com" and p["credentials"][0]["env_vars"] == ["OPENAI_API_KEY"]
     assert p["endpoints"][0]["host"] == "api.openai.com" and p["endpoints"][0]["port"] == 443
     assert "a1B2c3D4" not in str(p)  # a name, never a value
 
@@ -130,3 +130,12 @@ def test_custom_port_and_scheme_are_respected():
     )
     (endpoint,) = to_openshell_provider_profile(c)["endpoints"]
     assert (endpoint["host"], endpoint["port"]) == ("gateway.internal", 8080)
+
+
+def test_provider_id_differs_per_endpoint_so_two_gateways_do_not_clash():
+    def profile(url):
+        model = {"provider": "openai_compatible", "model": "m", "base_url": url, "credential_ref": "env://K"}
+        return to_openshell_provider_profile(compile_agent(spec_with(["demo.add_numbers"], model), demo_catalog()))
+
+    a, b = profile("https://a.example/v1"), profile("https://b.example/v1")
+    assert a["id"] != b["id"] and a["id"].startswith("agentbuilder-openai-compatible-")

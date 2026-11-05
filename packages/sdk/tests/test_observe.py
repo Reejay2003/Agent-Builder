@@ -124,3 +124,36 @@ def test_loading_errors_are_clear(tmp_path):
     (tmp_path / "single.json").write_text(json.dumps({"schema_version": "ATIF-v1.7", "steps": []}))
     with pytest.raises(TrajectoryError, match="item list"):
         load_eval(tmp_path / "single.json")
+
+
+@pytest.mark.parametrize(
+    "steps",
+    [
+        [{"step_id": 1, "source": "agent", "tool_calls": [{"function_name": "x", "arguments": '{"a": 1}'}]}],
+        [{"step_id": "x", "source": "agent"}],
+        ["not a step"],
+    ],
+)
+def test_malformed_steps_give_a_trajectory_error_not_a_crash(steps):
+    with pytest.raises(TrajectoryError, match=r"malformed trajectory \("):
+        from_dict({"schema_version": "ATIF-v1.7", "steps": steps})
+
+
+def _eval_file(tmp_path, items):
+    f = tmp_path / "eval.json"
+    f.write_text(json.dumps(items))
+    return f
+
+
+def test_eval_items_without_an_id_or_with_a_repeated_id_are_refused(tmp_path):
+    t = {"schema_version": "ATIF-v1.7", "steps": []}
+    with pytest.raises(TrajectoryError, match="item 1"):
+        load_eval(_eval_file(tmp_path, [{"item_id": "a", "trajectory": t}, {"trajectory": t}]))
+    with pytest.raises(TrajectoryError, match="twice"):
+        load_eval(_eval_file(tmp_path, [{"item_id": "a", "trajectory": t}, {"item_id": "a", "trajectory": t}]))
+
+
+def test_a_failed_eval_case_without_a_trajectory_maps_to_none_and_does_not_hide_the_others(tmp_path):
+    t = {"schema_version": "ATIF-v1.7", "steps": []}
+    got = load_eval(_eval_file(tmp_path, [{"item_id": "ok", "trajectory": t}, {"item_id": "failed"}]))
+    assert got["failed"] is None and got["ok"] is not None
