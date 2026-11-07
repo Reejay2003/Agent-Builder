@@ -57,7 +57,10 @@ def compile_agent(
     key_env = model.api_key_env
     if ref and ref.startswith("secret://"):
         key_env = secret_env_name(ref.removeprefix("secret://"))
-        warnings.append(f"credential {ref} is resolved from the environment variable {key_env} at run time")
+        warnings.append(
+            f"credential {ref} is resolved at run time from a secret store (the web app's vault under `ab ui`), "
+            f"else from the environment variable {key_env}"
+        )
 
     try:
         resolved = catalog.resolve([t.id for t in spec.tools])

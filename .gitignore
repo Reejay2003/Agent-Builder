@@ -20,3 +20,6 @@ dist/
 build/
 *.egg-info/
 .tmp/
+
+# Browser-automation output (screenshots, page snapshots)
+.playwright-mcp/

@@ -90,7 +90,10 @@ def test_ui_starts_both_servers_hands_the_web_app_its_tokens_and_stops_cleanly(t
         web_dir=tmp_path,
         startup_timeout=30,
     )
-    session.start()
+    try:
+        session.start()
+    except TimeoutError as exc:  # only on GitHub's macOS runners so far: say what we saw
+        pytest.fail(f"{exc}; the web process started and wrote its env file: {seen.exists()}")
     try:
         assert session._app is not None and session._app.audit_log == str(
             tmp_path / "state" / "agentbuilder" / "tool-calls.jsonl"

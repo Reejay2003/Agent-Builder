@@ -53,7 +53,8 @@ ${MODEL_CONFIGS("model_configs")}
 `;
 
 function open() {
-  const dir = path.join(process.cwd(), "data");
+  // AGENTBUILDER_WEB_DATA_DIR: a separate database for tests and trials, so they never touch your real one.
+  const dir = process.env.AGENTBUILDER_WEB_DATA_DIR || path.join(process.cwd(), "data");
   mkdirSync(dir, { recursive: true });
   const db = new DatabaseSync(path.join(dir, "app.db"));
   db.exec("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;");

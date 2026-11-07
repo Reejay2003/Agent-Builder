@@ -58,14 +58,19 @@ def _free_port() -> int:
         return int(s.getsockname()[1])
 
 
-def _answers(url: str) -> bool:
+def _unreachable(url: str) -> str | None:
+    """None when the server answers; otherwise why the last attempt failed (shown when `ab ui` gives up)."""
     try:
         urllib.request.urlopen(url, timeout=2)
     except urllib.error.HTTPError:
-        return True  # any HTTP answer (a redirect to /login, a 404) means the server is up
-    except (urllib.error.URLError, OSError):
-        return False
-    return True
+        return None  # any HTTP answer (a redirect to /login, a 404) means the server is up
+    except (urllib.error.URLError, OSError) as exc:
+        return str(getattr(exc, "reason", exc)) or type(exc).__name__
+    return None
+
+
+def _answers(url: str) -> bool:
+    return _unreachable(url) is None
 
 
 @dataclass
@@ -110,13 +115,15 @@ class UiSession:
         )
         self._web = subprocess.Popen(command, cwd=self.web_dir, env=env)
         deadline = time.monotonic() + self.startup_timeout
-        while not _answers(self.web_url):
+        while (why := _unreachable(self.web_url)) is not None:
             if self._web.poll() is not None:
                 self.stop()
                 raise RuntimeError(f"the web app exited with code {self._web.returncode} before it was ready")
             if time.monotonic() > deadline:
                 self.stop()
-                raise TimeoutError(f"the web app did not answer at {self.web_url} within {self.startup_timeout:.0f}s")
+                raise TimeoutError(
+                    f"the web app did not answer at {self.web_url} within {self.startup_timeout:.0f}s (last try: {why})"
+                )
             time.sleep(0.5)
         if self.open_browser:
             webbrowser.open(self.web_url)

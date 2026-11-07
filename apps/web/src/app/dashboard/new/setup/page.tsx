@@ -11,7 +11,7 @@ export const instant = false;
 export default async function Setup({ searchParams }: { searchParams: Promise<{ [k: string]: string | string[] | undefined }> }) {
   const { name, template } = await searchParams;
   const t = templates.find((x) => x.id === template && x.ready);
-  if (typeof name !== "string" || !name.trim() || !t?.toolset) redirect("/dashboard/new");
+  if (typeof name !== "string" || !name.trim() || !t?.recommended) redirect("/dashboard/new");
   const s = await getSession();
   if (!s) redirect("/login");
 

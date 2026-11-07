@@ -47,6 +47,17 @@ export async function getSession() {
   return { id, user, dek: dataKeys.get(id) as Buffer | undefined };
 }
 
+// The vault endpoint has no browser cookie (the SDK server calls it), so it uses the data key of any live, unlocked
+// session of the config's owner. None: the vault counts as locked.
+export function unlockedKeyFor(userId: number): Buffer | undefined {
+  const ids = db.prepare("SELECT id FROM sessions WHERE user_id = ? AND expires_at > datetime('now')").all(userId) as { id: string }[];
+  for (const { id } of ids) {
+    const dek = dataKeys.get(id) as Buffer | undefined;
+    if (dek) return dek;
+  }
+  return undefined;
+}
+
 export function setDataKey(sessionId: string, dek: Buffer) {
   dataKeys.set(sessionId, dek);
 }

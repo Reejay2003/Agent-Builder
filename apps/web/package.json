@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "node --test src/lib/"
+    "test": "node --test src/lib/*.test.mjs"
   },
   "dependencies": {
     "class-variance-authority": "0.7.1",

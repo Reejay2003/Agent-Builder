@@ -23,6 +23,7 @@ machine), and records exactly what the agent did. A local web app is the friendl
 ```
 
 ## Recent additions (newest first)
+- 2026-11-07 · F19 The web app and the SDK: the key only goes to the URL it was saved with; the vault answers only an unlocked owner.
 - 2026-11-07 · F18 rewritten: real human approvals (tool server waits, `ab run` asks in the terminal, the server queues for the web app). F4: the trajectory is redacted too. F14, F15: real-model results.
 - 2026-11-07 · F5, F6 updated: the audit log rotates at 10 MB; `web.search` checks the result-list markup, not the words "No results".
 - 2026-11-07 · F18 One approval rule for server, CLI and both runners.
@@ -56,6 +57,7 @@ machine), and records exactly what the agent did. A local web app is the friendl
 | F16 | Process | Automatic daily work log |
 | F17 | Models | No API key over plain http to a public host |
 | F18 | Safety | Human approvals: the pause happens inside the tool server |
+| F19 | Web | The web app and the SDK: who may send the key where |
 
 ---
 
@@ -272,6 +274,18 @@ machine), and records exactly what the agent did. A local web app is the friendl
 - **Proof:** `test_approvals.py` (real MCP client: yes runs the tool, no does not, exact payload seen, files cleaned up, folder 0700, mock never asks, expiry, crashing approver means no, terminal needs an explicit yes, flags only on live SDK servers); server tests (queue, 404/409, expiry, a server the SDK did not build refused); `test_approvals_on_nat.py` on real NAT + Fabric: refused without an approver, runs only after yes [verified].
 - **Not verified:** a live tier-2 call against real Google Calendar; the web app's approval screen.
 - **Interview angle:** *Why not ask the model to confirm?* The model is the thing that may have been tricked; the check must sit where it cannot reach. *What happens if nobody answers?* After 10 minutes it is a no, and the model is told so.
+
+### F19. The web app and the SDK: who may send the key where
+- **Added:** 2026-11-07 · **Status:** done for the wizard's model, tools and test steps (saving agents waits for the control service)
+- **What it is:** PLAN §16.13 defines the API between the web app and the SDK server. This entry covers what the plan does not say: how the web app keeps a stored key pointed at the right place, and how the SDK gets the key without a browser session.
+- **Why we built it:** The SDK reads `secret://modelcfg/<id>/api_key` from the web vault. If the browser could send any spec, it could pair a stored key with any `base_url` and send that key to a host it was never meant for.
+- **How it works:** 1) The browser only calls the web app's own routes (`/api/sdk/...`, `/api/model-configs/{id}/check`). Each one needs a signed-in session and a JSON body, so a cross-site form cannot call it. 2) The web app's server rebuilds the spec's `model` section from the saved model config (`modelFromConfig`): provider, URL, model and the `secret://` reference all come from the database row. 3) It adds the SDK token and forwards the call (`lib/sdk.ts`). 4) When a run or the model check needs the key, the SDK calls `GET /api/internal/secrets/modelcfg/<id>/api_key` with the vault token. The web app checks the token in constant time, accepts only loopback hosts and no browser `Origin`, and then decrypts with the data key of any live, unlocked session of the config's owner (`unlockedKeyFor`). No such session: 423 "the vault is locked". 5) The wizard shows the YAML and warnings the SDK wrote, never its own YAML.
+- **Decisions and trade-offs:** The SDK validates and writes YAML; the UI never does, so the two cannot disagree. The spec name is a slug of the typed name (found when the SDK rejected "Inbox helper"), and the typed name stays in `metadata.display_name`. The vault uses any unlocked session of the owner, because the SDK's request carries no cookie.
+- **Limits:** Anyone holding the SDK server's token could still call it directly with their own spec (the same limit as F17); the token lives only in `ab ui`'s two processes. Runs are not per user (one-user install). Created agents are not saved yet (control service, P1.6).
+- **Where:** `apps/web/src/lib/agent-spec.ts`, `lib/vault.ts`, `lib/sdk.ts`, `lib/sdk-routes.ts`, `app/api/internal/secrets/[...name]/route.ts`, `app/api/sdk/`, `app/api/model-configs/[id]/check/route.ts`, `app/dashboard/new/setup/wizard.tsx`.
+- **Proof:** `agent-spec.test.mjs` (model from the saved config, slug, vault names, token check, loopback) [verified]; driven in a browser with a fake model and a fake key: model check through the vault, mock run with trace, live run stopped for approval, Decline kept the tool from running [verified].
+- **Not verified:** a real provider through the web app; the vault with two users signed in at once.
+- **Interview angle:** *Why rebuild the model on the server?* The browser is the least trusted part; the key must follow the URL it was saved with. *How does a background process get a key that is encrypted with the user's password?* Only while that user has an unlocked session; otherwise it is refused, not guessed.
 
 ## Process
 
