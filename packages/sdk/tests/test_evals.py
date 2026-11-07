@@ -117,7 +117,7 @@ def test_run_suite_runs_every_case_in_order_and_reports_metrics():
 def test_ab_eval_uses_mock_tools_prints_the_gate_and_exits_by_outcome(monkeypatch, capsys, tmp_path):
     runner = Scripted([ran("42.5", ["demo__add_numbers"])] + [ran("no idea")] * 6)
     monkeypatch.setattr(cli, "load_runner", lambda name: runner)
-    monkeypatch.setenv("OPENAI_API_KEY", "k" * 20)
+    monkeypatch.setenv("LLM_API_KEY", "k" * 20)  # the calculator spec's env://LLM_API_KEY; the runner is fake
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
     out = tmp_path / "report.json"
     code = cli.main(["eval", str(EXAMPLES / "calculator.agent.yaml"), "--suite", "calculator_v1", "--json", str(out)])
