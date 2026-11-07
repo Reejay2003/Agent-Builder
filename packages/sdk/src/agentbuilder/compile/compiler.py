@@ -28,7 +28,12 @@ def _not_applied(spec: AgentSpec) -> list[str]:
     m = spec.model
     candidates = {
         "guardrails.profile": True,  # even the default 'standard' is not enforced yet; never imply protection
-        "model.reliability": bool(m.reliability.model_dump(exclude_defaults=True)),
+        "model.reliability": bool(
+            m.reliability.tier
+            or m.reliability.mode != "normal"
+            or m.reliability.repair.escalate_to
+            or (m.reliability.repair.max_attempts != 3 and "reprompt" not in m.reliability.repair.steps)
+        ),
         "model.routing": m.routing is not None,
         "model.max_tokens": m.max_tokens is not None,
         "sandbox.policy_preset": spec.sandbox.policy_preset is not None,
@@ -77,6 +82,14 @@ def compile_agent(
                 "nothing restricts it yet"
             )
 
+    steps = spec.model.reliability.repair.steps
+    if model.agent_mode != "react" and {"tool_names", "reprompt"} & set(steps):
+        warnings.append("repair steps tool_names and reprompt only apply in ReAct mode; this agent uses tool calling")
+    if "retry" in steps:
+        warnings.append("repair step retry changes nothing yet: NAT already retries failed model calls by itself")
+    if "reprompt" in steps:
+        parse_retries = max(1, spec.model.reliability.repair.max_attempts)
+
     if unapplied := _not_applied(spec):
         warnings.append("these spec fields are accepted but NOT applied yet: " + ", ".join(unapplied))
 
@@ -112,5 +125,30 @@ def compile_agent(
         tier3_policy=spec.approvals.tier3_destructive,
         sandbox_preset=spec.sandbox.policy_preset,
         parse_retries=parse_retries,
+        repair_steps=[x for x in steps if x == "tool_names"] if model.agent_mode == "react" else [],
         warnings=warnings,
+    )
+
+
+def unapproved_live_tools(c: CompiledAgent) -> list[str]:
+    """Tools that would act on a live system although the spec says a human must approve them first.
+
+    Approvals arrive in SDK 0.3; until then every caller (server, CLI, runners) refuses such a run instead of acting
+    unasked. A tool is live unless its server runs in mock mode (`--mock`, added by the gateway)."""
+    mocked = {s.name for s in c.servers if "--mock" in s.args}
+    return [
+        t.id
+        for t in c.tools
+        if t.server not in mocked
+        and (
+            (t.risk_tier == 2 and c.tier2_policy == "require_human")
+            or (t.risk_tier >= 3 and c.tier3_policy == "require_human")
+        )
+    ]
+
+
+def approval_needed(tool_ids: list[str]) -> str:
+    return (
+        f"live runs of {', '.join(tool_ids)} need human approval, which arrives in SDK 0.3: run in mock mode, "
+        "or set approvals.tier2_external_comms to allow"
     )

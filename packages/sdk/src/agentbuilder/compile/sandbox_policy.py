@@ -91,8 +91,10 @@ def to_openshell_provider_profile(
             f"the model endpoint {c.model.base_url} is on this machine's loopback; a sandbox cannot reach it there "
             "(use host.openshell.internal instead of localhost)"
         )
+    port = url.port or (443 if url.scheme == "https" else 80)
+    extra = f"_{port}" if url.port else ""  # profiles are global by id: two ports on one host must not share one
     return {
-        "id": f"agentbuilder-{_key(f'{c.model.provider}_{host}').replace('_', '-')}",
+        "id": f"agentbuilder-{_key(f'{c.model.provider}_{host}{extra}').replace('_', '-')}",
         "display_name": f"Agent Builder: {c.model.provider}",
         "description": f"Model API for agent '{c.name}'",
         "category": "inference",
@@ -111,7 +113,7 @@ def to_openshell_provider_profile(
         "endpoints": [
             {
                 "host": host,
-                "port": url.port or (443 if url.scheme == "https" else 80),
+                "port": port,
                 "protocol": "rest",
                 "access": "read-write",
                 "enforcement": "enforce",

@@ -20,6 +20,9 @@ class McpServerBinding(_Strict):
     name: str
     command: str
     args: list[str] = Field(default_factory=list)
+    gateway_flags: bool = (
+        False  # True for servers built with `agentbuilder.tools.mcp_server.main`: they accept --mock/--log
+    )
 
 
 class ResolvedTool(_Strict):
@@ -53,12 +56,20 @@ class ToolCatalog:
     def add_tools(self, server_name: str, tools: Sequence[Tool], command: str, args: Sequence[str] = ()) -> ToolCatalog:
         """Register Python tools that a `main(tools)` script serves over MCP stdio at `command args`."""
         return self.add_server(
-            McpServerBinding(name=server_name, command=command, args=list(args)), [t.manifest for t in tools]
+            McpServerBinding(name=server_name, command=command, args=list(args), gateway_flags=True),
+            [t.manifest for t in tools],
         )
 
     @property
     def tool_ids(self) -> list[str]:
         return sorted(self._tools)
+
+    @property
+    def servers(self) -> Mapping[str, McpServerBinding]:
+        return dict(self._servers)
+
+    def tools_of(self, server: str) -> list[ResolvedTool]:
+        return [t for t in self._tools.values() if t.server == server]
 
     def server(self, name: str) -> McpServerBinding:
         return self._servers[name]

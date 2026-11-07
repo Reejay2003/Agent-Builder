@@ -7,8 +7,10 @@ that carries an `Origin` header (a browser page calling directly) is refused. En
 
 from __future__ import annotations
 
+import contextlib
 import hmac
 import json
+import sys
 import threading
 import uuid
 from collections import OrderedDict
@@ -19,7 +21,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
 from agentbuilder import __version__
-from agentbuilder.compile import CompiledAgent, CompileError, compile_agent
+from agentbuilder.compile import CompiledAgent, CompileError, approval_needed, compile_agent, unapproved_live_tools
+from agentbuilder.gateway import Gateway, LocalGateway
+from agentbuilder.models import ProbeResult, probe_tool_calling, resolve_model
 from agentbuilder.models.credentials import CredentialError, SecretStore
 from agentbuilder.models.vault import LOOPBACK, TOKEN_HEADER
 from agentbuilder.observe import Trajectory
@@ -103,6 +107,8 @@ class LocalServer:
     catalog: ToolCatalog
     stores: Sequence[SecretStore] = ()
     runner_factory: Callable[[], Runner] = load_runner
+    gateway: Gateway = field(default_factory=LocalGateway)
+    audit_log: str | None = None  # one shared log of every tool call, written by the tool servers
     # Variables the server may resolve `env://` references from. Empty on purpose: a spec can name any variable and any
     # base_url, so reading the server's own environment would let a shared spec send it elsewhere.
     environ: Mapping[str, str] = field(default_factory=dict)
@@ -136,12 +142,12 @@ class LocalServer:
             )
         return 200, {"tools": listing}
 
-    def _compile(self, spec_data: Any) -> tuple[AgentSpec, CompiledAgent]:
+    def _compile(self, spec_data: Any, catalog: ToolCatalog | None = None) -> tuple[AgentSpec, CompiledAgent]:
         if not isinstance(spec_data, Mapping):
             raise _Invalid([{"field": "spec", "message": "spec must be an object"}])
         try:
             spec = AgentSpec.from_dict(spec_data)
-            return spec, compile_agent(spec, self.catalog)
+            return spec, compile_agent(spec, catalog or self.catalog)
         except SpecError as exc:
             raise _Invalid([_problem(p) for p in exc.problems]) from exc
         except CompileError as exc:
@@ -157,16 +163,50 @@ class LocalServer:
             "warnings": compiled.warnings,
         }
 
+    def check_model(self, body: Mapping[str, Any]) -> tuple[int, Any]:
+        """The wizard's "Test connection": one real model call (the model check, PLAN 4.4.1). The reply says whether
+        the endpoint, key and model work and whether the model can use tools; `agent_mode` is what to write."""
+        model = body.get("model")
+        if not isinstance(model, Mapping):
+            raise _Invalid([{"field": "model", "message": "model must be an object"}])
+        try:
+            spec = AgentSpec.from_dict({"name": "model-check", "model": dict(model)})
+            resolved = resolve_model(spec.model, environ=self.environ, stores=self.stores)
+        except SpecError as exc:
+            raise _Invalid([_problem(p) for p in exc.problems]) from exc
+        except CredentialError as exc:
+            raise _Invalid([{"field": "model.credential_ref", "message": str(exc)}]) from exc
+        result: ProbeResult = probe_tool_calling(resolved)
+        return 200, {
+            "ok": result.ok,
+            "tool_calling": result.tool_calling,
+            "agent_mode": result.agent_mode,
+            "message": result.message,
+        }
+
     def start_run(self, body: Mapping[str, Any]) -> tuple[int, Any]:
         prompt = body.get("prompt")
         if not isinstance(prompt, str) or not prompt.strip():
             raise _Invalid([{"field": "prompt", "message": "give the agent something to do"}])
-        spec, compiled = self._compile(body.get("spec"))
+        mock = body.get("mock", True)  # a test run never touches live systems unless the caller says so
+        if not isinstance(mock, bool):
+            raise _Invalid([{"field": "mock", "message": "mock must be true or false"}])
+        try:
+            catalog = self.gateway.apply(self.catalog, mock=mock, audit_log=self.audit_log)
+        except ValueError as exc:
+            raise _Invalid([{"field": "mock", "message": str(exc)}]) from exc
+        spec, compiled = self._compile(body.get("spec"), catalog)
+        if live := unapproved_live_tools(compiled):
+            raise _Invalid([{"field": "mock", "message": approval_needed(live)}])
         run = _Run(id=uuid.uuid4().hex)
         with self._lock:
+            if sum(r.status == "running" for r in self._runs.values()) >= MAX_RUNS:
+                return 429, {"ok": False, "errors": [{"field": "", "message": "too many runs waiting; try again soon"}]}
             self._runs[run.id] = run
-            while len(self._runs) > MAX_RUNS:
-                self._runs.popitem(last=False)
+            for old_id in [i for i, r in self._runs.items() if r.status != "running"]:
+                if len(self._runs) <= MAX_RUNS:
+                    break
+                del self._runs[old_id]  # only finished runs are forgotten, oldest first
         self._pool.submit(self._execute, run, spec, compiled, prompt)
         return 202, {"run_id": run.id}
 
@@ -247,7 +287,23 @@ def _handler(app: LocalServer) -> type[BaseHTTPRequestHandler]:
                 return None
             return body
 
+        def _guarded(self, handle: Callable[[], None]) -> None:
+            """Any error a handler did not expect becomes a plain 500. Only the error's type is logged: its text could
+            hold a provider reply, and a provider reply can hold a key."""
+            try:
+                handle()
+            except Exception as exc:
+                sys.stderr.write(f"agentbuilder server: unexpected {type(exc).__name__} on {self.path.split('?')[0]}\n")
+                with contextlib.suppress(OSError):  # the client may be gone, or a reply may be half sent
+                    self._send(500, {"ok": False, "errors": [{"field": "", "message": "unexpected server error"}]})
+
         def do_GET(self) -> None:
+            self._guarded(self._get)
+
+        def do_POST(self) -> None:
+            self._guarded(self._post)
+
+        def _get(self) -> None:
             if self._refuse():
                 return
             path = self.path.split("?")[0]
@@ -260,11 +316,11 @@ def _handler(app: LocalServer) -> type[BaseHTTPRequestHandler]:
             else:
                 self._send(404, {"ok": False, "errors": [{"field": "", "message": "no such endpoint"}]})
 
-        def do_POST(self) -> None:
+        def _post(self) -> None:
             if self._refuse():
                 return
             path = self.path.split("?")[0]
-            routes = {"/spec/validate": app.validate, "/runs": app.start_run}
+            routes = {"/spec/validate": app.validate, "/runs": app.start_run, "/model/check": app.check_model}
             if path not in routes:
                 self._send(404, {"ok": False, "errors": [{"field": "", "message": "no such endpoint"}]})
                 return

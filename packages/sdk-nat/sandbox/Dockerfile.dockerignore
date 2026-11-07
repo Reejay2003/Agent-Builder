@@ -1,0 +1,9 @@
+# Used by `make sandbox-image-sdk` (Docker reads <Dockerfile>.dockerignore next to the Dockerfile).
+# Allow-list: the build context is the repository root, so send only what the Dockerfile copies.
+# This also keeps .env, .venv and the rest of the repository out of the build.
+*
+!packages/sdk/src/agentbuilder
+!packages/sdk-nat/src/agentbuilder_nat
+!packages/sdk-nat/src/nemo_fabric_adapters
+**/__pycache__
+**/*.pyc

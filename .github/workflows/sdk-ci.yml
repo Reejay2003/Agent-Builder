@@ -2,9 +2,19 @@ name: sdk-ci
 
 on:
   push:
-    paths: ["packages/sdk/**", ".github/workflows/sdk-ci.yml"]
+    paths:
+      - "packages/sdk/**"
+      - "packages/sdk-nat/**"
+      - "packages/mcp-tools/**"
+      - "requirements.lock"
+      - ".github/workflows/sdk-ci.yml"
   pull_request:
-    paths: ["packages/sdk/**", ".github/workflows/sdk-ci.yml"]
+    paths:
+      - "packages/sdk/**"
+      - "packages/sdk-nat/**"
+      - "packages/mcp-tools/**"
+      - "requirements.lock"
+      - ".github/workflows/sdk-ci.yml"
 
 permissions:
   contents: read
@@ -32,6 +42,23 @@ jobs:
       - run: mypy
       # Offline tests only: no API key, no NVIDIA stack, no cost. The `nat` marker needs the full repo setup.
       - run: python -m pytest -m "not nat and not openshell"
+
+  runners:
+    # The runner package on the real NVIDIA stack (NAT + Fabric + Relay) against the SDK's fake model server: offline,
+    # no key, no cost. Slower than `check` because it installs the pinned stack from requirements.lock.
+    name: runners on real NAT and Fabric (offline, fake model)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -q -r requirements.lock
+      - run: python -m pip install -q -e "packages/sdk[dev]" -e packages/sdk-nat
+      - run: python -m pytest -q -m nat
+        working-directory: packages/sdk
+      - run: ruff check . && python -m pytest -q -m "not openshell"
+        working-directory: packages/sdk-nat
 
   clean-install:
     name: wheel installs in an empty environment and imports without NVIDIA packages

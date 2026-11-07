@@ -9,10 +9,12 @@ Design rules enforced here:
 
 from __future__ import annotations
 
+import ipaddress
 import re
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Literal
+from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -87,7 +89,27 @@ class ModelSpec(_Strict):
     def _needs_base_url(self) -> ModelSpec:
         if self.provider == "openai_compatible" and not self.base_url:
             raise ValueError("provider 'openai_compatible' requires base_url")
+        if self.credential_ref and self.base_url and _sends_key_in_clear(self.base_url):
+            raise ValueError(
+                "base_url uses plain http:// to a public host, which would send the API key unencrypted: "
+                "use https://, or http:// only for this machine or your local network"
+            )
         return self
+
+
+def _sends_key_in_clear(url: str) -> bool:
+    """http:// to anything but this machine, a private network address or a *.local / *.internal name."""
+    parts = urlsplit(url)
+    if parts.scheme != "http":
+        return False
+    host = (parts.hostname or "").lower()
+    if host == "localhost" or host.endswith((".local", ".internal", ".localhost")):
+        return False
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        return True  # a public name
+    return not (address.is_private or address.is_loopback or address.is_link_local)
 
 
 class InstructionsSpec(_Strict):

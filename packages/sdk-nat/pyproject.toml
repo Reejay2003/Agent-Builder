@@ -32,6 +32,7 @@ dependencies = [
 
 [project.entry-points."agentbuilder.runners"]
 local = "agentbuilder_nat.local:LocalRunner"
+sandbox = "agentbuilder_nat.sandbox:SandboxRunner"
 
 [project.urls]
 Repository = "https://github.com/Reejay2003/Agent-Builder"
@@ -46,4 +47,5 @@ extend-exclude = ["src/nemo_fabric_adapters"]  # adapted from NVIDIA's code; kee
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = ["openshell: runs the agent in a real OpenShell microVM (needs Docker, a gateway and the image)"]
 addopts = "-W ignore"

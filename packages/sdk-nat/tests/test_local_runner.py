@@ -159,3 +159,62 @@ def test_two_runs_at_once_in_one_event_loop_both_finish():
     worker.join(timeout=120)
     assert not worker.is_alive(), "two concurrent runs deadlocked"
     assert all(r.ok for r in outcome["results"])
+
+
+def test_the_personal_template_runs_on_real_nat_with_mocked_google_tools(tmp_path):
+    """spec -> compile (library + gateway mock) -> LocalRunner -> real NAT -> real Gmail MCP server in mock mode."""
+    import json
+
+    from agentbuilder.gateway import LocalGateway
+    from agentbuilder.library import personal_catalog
+
+    log = tmp_path / "tool-calls.jsonl"
+    model = FakeModel(
+        [Turn.react("gmail__read", {"query": "is:unread"}), Turn.react_final("You have mail from Alice.")]
+    )
+    with FakeOpenAIServer(model) as server:
+        spec = AgentSpec.load(ROOT / "packages" / "sdk" / "examples" / "specs" / "personal_automation.agent.yaml")
+        spec = spec.model_copy(
+            update={"model": spec.model.model_copy(update={"agent_mode": "react", "base_url": server.base_url})}
+        )
+        catalog = LocalGateway().apply(personal_catalog(), mock=True, audit_log=str(log))
+        compiled = compile_agent(spec, catalog)
+        result = LocalRunner().run(
+            compiled,
+            "Any unread mail?",
+            environ=credential_env(spec, compiled, environ={compiled.model.api_key_env: KEY}),
+        )
+    assert result.ok and result.text == "You have mail from Alice."
+    assert result.trajectory.tools_used == ["gmail__read"]
+    assert "Lunch on Friday?" in str(
+        result.trajectory.real_tool_calls[0].result
+    )  # the tool's mock answer reached the model
+    (record,) = [json.loads(line) for line in log.read_text().splitlines()]
+    assert record["id"] == "gmail.read" and record["mock"] is True
+
+
+def test_repair_steps_reach_the_adapter_and_each_repair_is_reported(monkeypatch):
+    import nemo_fabric
+    from agentbuilder.spec.models import ReliabilitySpec, RepairSpec
+
+    seen = {}
+
+    async def fake_run(self, config, **kwargs):
+        seen["repair"] = os.environ.get("FABRIC_NAT_REPAIR")
+        repairs = [{"kind": "tool_name", "requested": "add_numbers", "resolved": "demo__add_numbers"}]
+        return _FakeOutcome({"status": "succeeded", "output": {"response": "ok", "repairs": repairs}})
+
+    monkeypatch.setattr(nemo_fabric.Fabric, "run", fake_run)
+    monkeypatch.delenv("FABRIC_NAT_REPAIR", raising=False)
+    spec, compiled = agent("react", "http://127.0.0.1:1/v1")
+    spec = spec.model_copy(
+        update={
+            "model": spec.model.model_copy(
+                update={"reliability": ReliabilitySpec(repair=RepairSpec(steps=["tool_names"]))}
+            )
+        }
+    )
+    compiled = compile_agent(spec, ToolCatalog().add_tools("demo", TOOLS, command=sys.executable, args=[str(SERVER)]))
+    result = LocalRunner().run(compiled, "hi", environ=credential_env_for(spec, compiled))
+    assert seen["repair"] == "tool_names" and "FABRIC_NAT_REPAIR" not in os.environ  # set for the run, then removed
+    assert any("repaired" in w and "demo__add_numbers" in w for w in result.warnings)

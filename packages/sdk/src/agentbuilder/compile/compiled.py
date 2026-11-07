@@ -51,6 +51,7 @@ class CompiledAgent(_Strict):
     tier3_policy: str = "block"
     sandbox_preset: str | None = None
     parse_retries: int = 3
+    repair_steps: list[str] = Field(default_factory=list)  # runner-side repairs to switch on (PLAN 4.4.2)
     warnings: list[str] = Field(default_factory=list)
 
     def tools_for(self, server: str) -> list[CompiledTool]:

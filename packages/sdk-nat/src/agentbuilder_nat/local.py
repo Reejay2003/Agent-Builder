@@ -21,7 +21,7 @@ from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from pathlib import Path
 
-from agentbuilder.compile import CompiledAgent, to_fabric_config
+from agentbuilder.compile import CompiledAgent, approval_needed, to_fabric_config, unapproved_live_tools
 from agentbuilder.observe import Trajectory, TrajectoryError, load
 from agentbuilder.runtime import RunResult, redact_values
 
@@ -62,6 +62,8 @@ class LocalRunner:
     async def arun(
         self, compiled: CompiledAgent, prompt: str, *, environ: Mapping[str, str] | None = None
     ) -> RunResult:
+        if live := unapproved_live_tools(compiled):  # the last line of defence, whoever called us
+            return RunResult(status="failed", error=approval_needed(live))
         env = dict(os.environ if environ is None else environ)
         key_name = compiled.model.api_key_env
         secrets = {key_name: env[key_name]} if key_name and key_name in env else {}
@@ -86,6 +88,8 @@ class LocalRunner:
             to_fabric_config(compiled, adapter_dir=str(ADAPTER_DIR), relay_output_dir=str(out))
         )
         updates = {**secrets, "ADAPTER_PYTHON": sys.executable, "PYTHONPATH": _python_path()}
+        if compiled.repair_steps:  # the adapter reads the repair switches from its environment
+            updates["FABRIC_NAT_REPAIR"] = ",".join(compiled.repair_steps)
         # Take the lock in a worker thread: blocking here would freeze the event loop while another run holds it.
         await asyncio.to_thread(_ENV_LOCK.acquire)
         try:
@@ -99,6 +103,8 @@ class LocalRunner:
         warnings: list[str] = []
         trajectory = _read_trajectory(out, warnings)
         text = (outcome.get("output") or {}).get("response")
+        for fix in (outcome.get("output") or {}).get("repairs") or []:  # a repair is never silent
+            warnings.append(f"repaired: the model asked for {fix.get('requested')!r}, used {fix.get('resolved')!r}")
         if outcome.get("status") == "succeeded":
             return RunResult(status="succeeded", text=text, trajectory=trajectory, warnings=tuple(warnings))
         error = outcome.get("error")

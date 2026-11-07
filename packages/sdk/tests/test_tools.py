@@ -194,7 +194,7 @@ def test_catalog_resolves_and_reports_unknown_ids():
     cat = ToolCatalog().add_tools("demo", [add_numbers, count_words], command="python", args=["server.py"])
     got = cat.resolve(["demo.count_words", "demo.add_numbers"])
     assert [t.id for t in got] == ["demo.count_words", "demo.add_numbers"] and got[0].server == "demo"
-    assert cat.server("demo") == McpServerBinding(name="demo", command="python", args=["server.py"])
+    assert cat.server("demo") == McpServerBinding(name="demo", command="python", args=["server.py"], gateway_flags=True)
     with pytest.raises(UnknownToolError, match=r"gmail\.read"):
         cat.resolve(["demo.add_numbers", "gmail.read"])
     with pytest.raises(ValueError, match="already"):

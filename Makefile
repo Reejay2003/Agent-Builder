@@ -6,7 +6,7 @@ COMPOSE := docker compose -f deploy/compose/docker-compose.yml --env-file .env
 # LLM_API_KEY falls back to OPENROUTER_API_KEY so older .env files keep working
 RUN_ENV := set -a; . ./.env; set +a; export LLM_API_KEY="$${LLM_API_KEY:-$$OPENROUTER_API_KEY}"; . .venv/bin/activate
 
-.PHONY: help sdk-check sdk-test-openshell sdk-test-nat test eval env setup setup-full check up down ps logs agent fabric-agent fabric-doctor sandbox-image dev-shell
+.PHONY: help sdk-check sdk-test-openshell sdk-test-nat test eval env setup setup-full check up down ps logs agent fabric-agent fabric-doctor sandbox-image sandbox-image-sdk dev-shell
 
 help:  ## list targets
 	@grep -E '^[a-zA-Z_-]+:.*##' Makefile | awk -F':.*## ' '{printf "  %-16s %s\n", $$1, $$2}'
@@ -46,12 +46,13 @@ agent:  ## run the simple NAT agent: make agent Q="your question"
 sdk-check:  ## SDK: ruff, format, mypy --strict and offline tests (no key, no cost)
 	. .venv/bin/activate; cd packages/sdk && ruff check . && ruff format --check . && mypy && python -m pytest -q -m "not nat and not openshell" -W ignore
 
-sdk-test-openshell:  ## SDK: generated sandbox policy on a real OpenShell microVM (needs Docker + gateway; no key, no cost)
+sdk-test-openshell:  ## SDK: sandbox policy and SandboxRunner on a real OpenShell microVM (needs Docker, a gateway and `make sandbox-image-sdk`; no key, no cost)
 	. .venv/bin/activate; cd packages/sdk && python -m pytest -q -m openshell -W ignore
+	. .venv/bin/activate; cd packages/sdk-nat && python -m pytest -q -m openshell
 
 sdk-test-nat:  ## SDK + LocalRunner: real NAT agents against the fake OpenAI server (needs the full setup; no key, no cost)
 	. .venv/bin/activate; cd packages/sdk && python -m pytest -q -m nat -W ignore
-	. .venv/bin/activate; cd packages/sdk-nat && ruff check . && python -m pytest -q
+	. .venv/bin/activate; cd packages/sdk-nat && ruff check . && python -m pytest -q -m "not openshell"
 
 test:  ## offline tests for our adapter additions (no LLM, no cost)
 	$(RUN_ENV); python packages/sdk-nat/tests/test_adapter_patches.py
@@ -67,6 +68,9 @@ fabric-doctor:  ## Fabric pre-flight check (no LLM call)
 
 sandbox-image:  ## build the OpenShell agent image (OpenShell must be installed, see spikes/s3-openshell/README.md)
 	docker build -f spikes/s3-openshell/Dockerfile.agent -t agent-builder/s3-agent:0.1 spikes/s3-openshell
+
+sandbox-image-sdk: sandbox-image  ## build the SandboxRunner image (SDK + adapter on top of the spike image)
+	docker build -f packages/sdk-nat/sandbox/Dockerfile -t agent-builder/sdk-agent:0.1 .
 
 dev-shell:  ## shell in a container with all Python deps (no local Python needed)
 	$(COMPOSE) --profile dev run --rm dev bash

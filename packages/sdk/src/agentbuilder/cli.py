@@ -8,21 +8,27 @@ import json
 import platform
 import signal
 import sys
+import webbrowser
 from collections.abc import Sequence
 from importlib.metadata import entry_points
+from importlib.util import find_spec
 from pathlib import Path
 
 from agentbuilder import __version__
 from agentbuilder.compile import (
     CompiledAgent,
     CompileError,
+    approval_needed,
     compile_agent,
     to_fabric_config,
     to_nat_yaml,
     to_openshell_policy,
     to_openshell_provider_profile,
     to_openshell_yaml,
+    unapproved_live_tools,
 )
+from agentbuilder.gateway import LocalGateway, default_audit_log
+from agentbuilder.models import probe_tool_calling, resolve_model
 from agentbuilder.models.credentials import CredentialError
 from agentbuilder.runtime import RUNNER_GROUP, RunnerNotInstalled, credential_env, load_runner
 from agentbuilder.spec import AgentSpec, SpecError
@@ -30,6 +36,12 @@ from agentbuilder.tools import ToolCatalog
 from agentbuilder.ui import MIN_NODE, UiSession, find_web_dir, node_version
 
 FORMATS = ("nat", "fabric", "policy", "provider")
+GOOGLE_HELP = """To sign in once (free; about 5 minutes):
+  1. console.cloud.google.com -> new project -> APIs & Services -> enable: Gmail API, Google Calendar API, Sheets API
+  2. OAuth consent screen -> External -> add yourself as a Test user
+  3. Credentials -> Create credentials -> OAuth client ID -> Application type: Desktop app -> download the JSON
+  4. ab auth google --client-secret ~/Downloads/client_secret_....json
+While the app is in "Testing" status, Google expires the sign-in after 7 days: just run step 4 again."""
 
 
 def load_catalog(ref: str | None) -> ToolCatalog:
@@ -43,6 +55,16 @@ def load_catalog(ref: str | None) -> ToolCatalog:
         if not isinstance(catalog, ToolCatalog):
             raise SystemExit(f"{ref} is not a ToolCatalog (or a function returning one)")
         return catalog
+    return _with_library(_demo_catalog())
+
+
+def _with_library(catalog: ToolCatalog) -> ToolCatalog:
+    from agentbuilder.library import personal_catalog
+
+    return personal_catalog(catalog)
+
+
+def _demo_catalog() -> ToolCatalog:
     tools_dir = next(
         (
             p / "packages" / "mcp-tools"
@@ -88,6 +110,13 @@ def cmd_compile(args: argparse.Namespace) -> int:
 
 def cmd_run(args: argparse.Namespace) -> int:
     spec, compiled = _load(args.spec, args.tools)
+    if args.mock:  # tools return canned answers; nothing touches Gmail, Calendar, Sheets or the web
+        compiled = compile_agent(
+            spec, LocalGateway().apply(load_catalog(args.tools), mock=True, audit_log=default_audit_log())
+        )
+    if live := unapproved_live_tools(compiled):
+        print(f"error: {approval_needed(live)} (--mock)", file=sys.stderr)
+        return 1
     env = credential_env(spec, compiled)  # a missing key is reported before anything is started
     result = load_runner(args.runner).run(compiled, args.prompt, environ=env)
     if result.trajectory:
@@ -104,6 +133,62 @@ def cmd_run(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_probe_model(args: argparse.Namespace) -> int:
+    spec = AgentSpec.load(args.spec)
+    print(f"checking {spec.model.provider}/{spec.model.model}: this sends one real request", file=sys.stderr)
+    result = probe_tool_calling(resolve_model(spec.model))
+    print(result.message)
+    if result.agent_mode:
+        print(f"set model.agent_mode to {result.agent_mode}")
+    return 0 if result.ok else 1
+
+
+def cmd_tools(args: argparse.Namespace) -> int:
+    catalog = load_catalog(args.tools)
+    tiers = {0: "read-only", 1: "writes", 2: "contacts people", 3: "destructive or financial"}
+    for t in catalog.resolve(catalog.tool_ids):
+        m = t.manifest
+        hosts = ", ".join(h for h in m.egress_hosts if h != "oauth2.googleapis.com") or "none"
+        print(f"{t.id:24} tier {m.risk_tier} ({tiers[m.risk_tier]}); network: {hosts}")
+        print(f"{'':24} {m.description_plain[:110]}")
+    return 0
+
+
+def _show_and_open(url: str) -> bool:
+    print(f"If it does not open, visit:\n{url}\n")
+    return webbrowser.open(url)
+
+
+def cmd_auth(args: argparse.Namespace) -> int:
+    from agentbuilder.library import google
+
+    try:
+        if args.action == "google":
+            if not args.client_secret:
+                print(GOOGLE_HELP, file=sys.stderr)
+                raise SystemExit("error: pass --client-secret FILE (see the steps above)")
+            print("Opening your browser to sign in to Google... (press Ctrl+C to cancel)", flush=True)
+            path = google.sign_in(
+                args.client_secret,
+                open_browser=lambda url: (print(f"If it does not open, visit:\n{url}\n"), webbrowser.open(url)),
+            )
+            print(f"Signed in. Saved to {path} (private to you).")
+        elif args.action == "status":
+            info = google.status()
+            print("signed in" if info["signed_in"] else "not signed in", f"({info['path']})")
+            if info["signed_in"]:
+                print(f"scopes: {', '.join(info['scopes'])}; saved {info['saved_days_ago']} day(s) ago")
+                if info["saved_days_ago"] >= 6:
+                    print("note: in Google's Testing mode the sign-in expires after 7 days; sign in again soon")
+            return 0 if info["signed_in"] else 1
+        else:
+            print("signed out and revoked" if google.sign_out() else "nothing to remove")
+    except google.ToolError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    return 0
+
+
 def cmd_doctor(args: argparse.Namespace) -> int:
     ok = True
 
@@ -117,6 +202,8 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     check("agentbuilder", True, __version__)
     runners = sorted(ep.name for ep in entry_points(group=RUNNER_GROUP))
     check("a runner is installed", bool(runners), ", ".join(runners) or "pip install agentbuilder-nat")
+    mcp = find_spec("mcp") is not None
+    check("mcp package (runs the tool servers)", mcp, "" if mcp else "pip install 'agentbuilder[mcp]'")
     node = node_version()
     check(
         f"Node {MIN_NODE[0]}.{MIN_NODE[1]} or newer (for `ab ui`)",
@@ -176,8 +263,19 @@ def parser() -> argparse.ArgumentParser:
     r = with_spec("run", "run an agent once")
     r.add_argument("prompt")
     r.add_argument("--runner", default="local")
+    r.add_argument("--mock", action="store_true", help="tools return canned answers and touch nothing live")
     r.set_defaults(fn=cmd_run)
+    pm = sub.add_parser("probe-model", help="one real request: does the model work and can it use tools?")
+    pm.add_argument("spec", help="path to an *.agent.yaml file")
+    pm.set_defaults(fn=cmd_probe_model)  # no --tools: the probe sends its own test tool, not the agent's
     sub.add_parser("doctor", help="check this machine").set_defaults(fn=cmd_doctor)
+    t = sub.add_parser("tools", help="list the available tools with their risk tier and network access")
+    t.add_argument("--tools", help="module:attribute that provides the ToolCatalog (default: demo + personal tools)")
+    t.set_defaults(fn=cmd_tools)
+    a = sub.add_parser("auth", help="sign in to Google for the Gmail, Calendar and Sheets tools")
+    a.add_argument("action", choices=["google", "status", "revoke"])
+    a.add_argument("--client-secret", help="the OAuth client JSON downloaded from Google Cloud (Desktop app)")
+    a.set_defaults(fn=cmd_auth)
     u = sub.add_parser("ui", help="open the local web app")
     u.add_argument("--port", type=int, default=3000)
     u.add_argument("--web-dir")

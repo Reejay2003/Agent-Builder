@@ -24,6 +24,7 @@ from dataclasses import dataclass, field
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 
+from agentbuilder.gateway import default_audit_log
 from agentbuilder.models.vault import LocalVaultStore
 from agentbuilder.server import LocalServer, build_server
 from agentbuilder.tools import ToolCatalog
@@ -90,7 +91,10 @@ class UiSession:
             )
         api_token, vault_token = secrets.token_urlsafe(32), secrets.token_urlsafe(32)
         self._app = LocalServer(
-            token=api_token, catalog=self.catalog, stores=[LocalVaultStore(self.web_url, vault_token)]
+            token=api_token,
+            catalog=self.catalog,
+            stores=[LocalVaultStore(self.web_url, vault_token)],
+            audit_log=default_audit_log(),
         )
         self._server = build_server(self._app, port=self.api_port)
         self.api_url = f"http://127.0.0.1:{self._server.server_port}"

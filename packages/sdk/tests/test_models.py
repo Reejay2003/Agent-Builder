@@ -88,8 +88,8 @@ def test_resolve_model_fills_defaults_and_hides_the_key():
     assert KEY not in repr(r)
     local = resolve_model(Model.ollama("llama3"), environ={})
     assert local.base_url == "http://localhost:11434/v1" and local.api_key is None
-    custom = resolve_model(Model.custom("m", base_url="http://x:1/v1/", api_key_env="K"), environ={"K": KEY})
-    assert custom.base_url == "http://x:1/v1"  # trailing slash trimmed
+    custom = resolve_model(Model.custom("m", base_url="https://x:1/v1/", api_key_env="K"), environ={"K": KEY})
+    assert custom.base_url == "https://x:1/v1"  # trailing slash trimmed
 
 
 def test_resolve_model_can_skip_the_key_for_compile_and_validate():
@@ -133,3 +133,29 @@ def test_auto_agent_mode_follows_the_table_and_explicit_always_wins():
     assert resolve_agent_mode(Model.openai("never-heard-of-it")) == "tool_calling"  # sensible default for unknown
     assert resolve_agent_mode(Model.openai("gpt-4.1-mini", agent_mode="react")) == "react"
     assert resolve_agent_mode(ModelSpec(provider="openai", model="x", agent_mode="tool_calling")) == "tool_calling"
+
+
+@pytest.mark.parametrize(
+    ("url", "refused"),
+    [
+        ("http://api.example.com/v1", True),  # a key over plain http to the internet
+        ("http://8.8.8.8/v1", True),
+        ("https://api.example.com/v1", False),
+        ("http://localhost:11434/v1", False),
+        ("http://127.0.0.1:8000/v1", False),
+        ("http://192.168.1.20:8000/v1", False),  # a box on the local network
+        ("http://host.openshell.internal:8000/v1", False),  # this machine, seen from a sandbox
+        ("http://gpu-box.local:8000/v1", False),
+    ],
+)
+def test_a_key_is_never_sent_unencrypted_to_a_public_host(url, refused):
+    from agentbuilder.spec import AgentSpec, SpecError
+
+    data = {"name": "a", "model": {"provider": "openai_compatible", "model": "m", "base_url": url}}
+    keyed = {**data, "model": {**data["model"], "credential_ref": "env://K"}}
+    AgentSpec.from_dict(data)  # without a key, plain http is fine anywhere
+    if refused:
+        with pytest.raises(SpecError, match="unencrypted"):
+            AgentSpec.from_dict(keyed)
+    else:
+        AgentSpec.from_dict(keyed)

@@ -168,3 +168,18 @@ def test_the_server_never_resolves_env_references_from_its_own_environment(monke
         time.sleep(0.05)
     app.shutdown()
     assert run["status"] == "failed" and "AWS_SECRET_ACCESS_KEY" in run["error"] and not runner.calls
+
+
+def test_an_unexpected_error_is_a_plain_500_and_its_text_is_never_logged(api, monkeypatch, capsys):
+    from agentbuilder.server import app as app_module
+
+    def broken(model):
+        raise RuntimeError(f"provider said: bad key {KEY}")
+
+    monkeypatch.setattr(app_module, "probe_tool_calling", broken)
+    model = {"provider": "openai", "model": "m", "credential_ref": "secret://modelcfg/3/api_key"}
+    status, body = api("POST", "/model/check", {"model": model})
+    assert status == 500 and body == {"ok": False, "errors": [{"field": "", "message": "unexpected server error"}]}
+    logged = capsys.readouterr().err
+    assert "unexpected RuntimeError on /model/check" in logged and KEY not in logged
+    assert api("GET", "/health")[0] == 200  # the server keeps serving

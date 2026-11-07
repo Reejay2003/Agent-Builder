@@ -139,3 +139,13 @@ def test_provider_id_differs_per_endpoint_so_two_gateways_do_not_clash():
 
     a, b = profile("https://a.example/v1"), profile("https://b.example/v1")
     assert a["id"] != b["id"] and a["id"].startswith("agentbuilder-openai-compatible-")
+
+
+def test_provider_id_includes_a_non_default_port_because_profiles_are_global():
+    """Found on a real gateway: a profile imported for one port was silently reused for another."""
+
+    def profile(url):
+        model = {"provider": "openai_compatible", "model": "m", "base_url": url, "credential_ref": "env://K"}
+        return to_openshell_provider_profile(compile_agent(spec_with(["demo.add_numbers"], model), demo_catalog()))
+
+    assert profile("https://h.test:8001/v1")["id"] != profile("https://h.test:8002/v1")["id"]
