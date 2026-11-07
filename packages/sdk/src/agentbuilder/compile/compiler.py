@@ -27,17 +27,17 @@ def _not_applied(spec: AgentSpec) -> list[str]:
     """Spec fields that are accepted but change nothing yet (silence would look like protection)."""
     m = spec.model
     candidates = {
-        "guardrails.profile": True,  # even the default 'standard' is not enforced yet; never imply protection
+        # Compiler D writes the NeMo Guardrails config (`ab compile --format guardrails`), but no runner applies it
+        # yet; even the default 'standard' must never look like protection.
+        "guardrails.profile": True,
         "model.reliability": bool(
             m.reliability.tier
-            or m.reliability.mode != "normal"
             or m.reliability.repair.escalate_to
             or (m.reliability.repair.max_attempts != 3 and "reprompt" not in m.reliability.repair.steps)
         ),
         "model.routing": m.routing is not None,
         "model.max_tokens": m.max_tokens is not None,
         "sandbox.policy_preset": spec.sandbox.policy_preset is not None,
-        "evals.suite": spec.evals.suite is not None,
         "knowledge": spec.knowledge is not None,
         "integrations": bool(spec.integrations),
         "channels": bool(spec.channels),
@@ -74,8 +74,10 @@ def compile_agent(
                 f"tool {t.id} is tier 3 (destructive or financial) and approvals.tier3_destructive is 'block'; "
                 "remove the tool or set tier3_destructive: require_human"
             )
-        if tier >= 2 and spec.approvals.tier2_external_comms == "require_human":
-            warnings.append(f"tool {t.id} is tier {tier}: every live call waits for a person to approve it")
+        limited = spec.model.reliability.mode == "limited"
+        if (tier >= 2 and spec.approvals.tier2_external_comms == "require_human") or (tier == 1 and limited):
+            why = " (limited mode)" if tier == 1 else ""
+            warnings.append(f"tool {t.id} is tier {tier}: every live call waits for a person to approve it{why}")
         if tier >= 1:
             warnings.append(
                 f"tool {t.id} can change things (tier {tier}); only the sandbox runner limits its network access"
@@ -122,6 +124,7 @@ def compile_agent(
         guardrails_profile=spec.guardrails.profile,
         tier2_policy=spec.approvals.tier2_external_comms,
         tier3_policy=spec.approvals.tier3_destructive,
+        reliability_mode=spec.model.reliability.mode,
         sandbox_preset=spec.sandbox.policy_preset,
         parse_retries=parse_retries,
         repair_steps=[x for x in steps if x == "tool_names"] if model.agent_mode == "react" else [],
@@ -132,14 +135,22 @@ def compile_agent(
 APPROVAL_TIMEOUT = 600.0  # seconds a tool waits for a person; then the call is declined and never runs
 
 
+def tool_decision(c: CompiledAgent, tool: CompiledTool) -> str:
+    """Compiler D's one rule for a live call of a listed tool: "allow", "ask" (a person approves each call) or
+    "deny". The tool servers, the runners and the OPA bundle (`to_opa_bundle`) all use this, so they cannot drift.
+    Mock calls touch nothing live and are always allowed; a tool the spec did not list is always denied."""
+    if tool.risk_tier >= 3:
+        return "ask" if c.tier3_policy == "require_human" else "deny"
+    if tool.risk_tier == 2:
+        return "ask" if c.tier2_policy == "require_human" else "allow"
+    if tool.risk_tier == 1 and c.reliability_mode == "limited":
+        return "ask"  # a weak model may draft, but a person checks every change
+    return "allow"
+
+
 def needs_approval(c: CompiledAgent) -> list[str]:
-    """Tool ids whose live calls a person must approve first, by the spec's approval rules."""
-    return [
-        t.id
-        for t in c.tools
-        if (t.risk_tier == 2 and c.tier2_policy == "require_human")
-        or (t.risk_tier >= 3 and c.tier3_policy == "require_human")
-    ]
+    """Tool ids whose live calls a person must approve first."""
+    return [t.id for t in c.tools if tool_decision(c, t) == "ask"]
 
 
 def unapproved_live_tools(c: CompiledAgent) -> list[str]:

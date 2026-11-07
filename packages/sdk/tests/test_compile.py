@@ -125,7 +125,7 @@ def test_fields_that_are_accepted_but_not_applied_are_listed():
                 "provider": "openai",
                 "model": "m",
                 "max_tokens": 100,
-                "reliability": {"mode": "limited"},
+                "reliability": {"tier": "limited"},  # mode: limited IS applied now (compiler D); tier is not yet
                 "routing": {"provider": "switchyard", "algorithm": "escalation"},
             },
             "guardrails": {"profile": "strict"},
@@ -142,12 +142,12 @@ def test_fields_that_are_accepted_but_not_applied_are_listed():
         "model.routing",
         "model.max_tokens",
         "sandbox.policy_preset",
-        "evals.suite",
         "knowledge",
         "channels",
     ):
         assert field in warning, field
     assert "integrations" not in warning and "voice" not in warning  # only what was actually set
+    assert "evals.suite" not in warning  # applied: `ab eval` runs it
 
 
 def test_even_the_default_guardrails_are_reported_as_not_applied():

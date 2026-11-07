@@ -6,7 +6,7 @@ COMPOSE := docker compose -f deploy/compose/docker-compose.yml --env-file .env
 # LLM_API_KEY falls back to OPENROUTER_API_KEY so older .env files keep working
 RUN_ENV := set -a; . ./.env; set +a; export LLM_API_KEY="$${LLM_API_KEY:-$$OPENROUTER_API_KEY}"; . .venv/bin/activate
 
-.PHONY: help sdk-check sdk-test-openshell sdk-test-nat test eval env setup setup-full check up down ps logs agent fabric-agent fabric-doctor sandbox-image sandbox-image-sdk dev-shell
+.PHONY: help sdk-check sdk-test-openshell sdk-test-nat test eval env setup setup-full check up down ps logs agent fabric-agent fabric-doctor sandbox-image sandbox-image-sdk control-test dev-shell
 
 help:  ## list targets
 	@grep -E '^[a-zA-Z_-]+:.*##' Makefile | awk -F':.*## ' '{printf "  %-16s %s\n", $$1, $$2}'
@@ -71,6 +71,9 @@ sandbox-image:  ## build the OpenShell agent image (OpenShell must be installed,
 
 sandbox-image-sdk: sandbox-image  ## build the SandboxRunner image (SDK + adapter on top of the spike image)
 	docker build -f packages/sdk-nat/sandbox/Dockerfile -t agent-builder/sdk-agent:0.1 .
+
+control-test:  ## control service: offline tests, plus a real Postgres when AGENTBUILDER_TEST_POSTGRES_URL is set
+	. .venv/bin/activate; cd services/control && ruff check . && python -m pytest -q
 
 dev-shell:  ## shell in a container with all Python deps (no local Python needed)
 	$(COMPOSE) --profile dev run --rm dev bash

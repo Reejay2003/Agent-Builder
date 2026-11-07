@@ -6,6 +6,7 @@ on:
       - "packages/sdk/**"
       - "packages/sdk-nat/**"
       - "packages/mcp-tools/**"
+      - "services/control/**"
       - "requirements.lock"
       - ".github/workflows/sdk-ci.yml"
   pull_request:
@@ -13,6 +14,7 @@ on:
       - "packages/sdk/**"
       - "packages/sdk-nat/**"
       - "packages/mcp-tools/**"
+      - "services/control/**"
       - "requirements.lock"
       - ".github/workflows/sdk-ci.yml"
 
@@ -59,6 +61,30 @@ jobs:
         working-directory: packages/sdk
       - run: ruff check . && python -m pytest -q -m "not openshell"
         working-directory: packages/sdk-nat
+
+  control:
+    # The control service against a real Postgres (GitHub's service container), plus its offline tests.
+    name: control service on Postgres
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:0.8.0-pg17
+        env: {POSTGRES_USER: t, POSTGRES_PASSWORD: t, POSTGRES_DB: t}
+        ports: ["5432:5432"]
+        options: --health-cmd "pg_isready -U t -d t" --health-interval 5s --health-timeout 3s --health-retries 10
+    defaults:
+      run:
+        working-directory: services/control
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -q -e "../../packages/sdk[dev]" -e ".[dev]"
+      - run: ruff check .
+      - run: python -m pytest -q
+        env:
+          AGENTBUILDER_TEST_POSTGRES_URL: postgresql+psycopg://t:t@127.0.0.1:5432/t
 
   clean-install:
     name: wheel installs in an empty environment and imports without NVIDIA packages

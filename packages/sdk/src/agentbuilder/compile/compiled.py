@@ -49,6 +49,7 @@ class CompiledAgent(_Strict):
     guardrails_profile: str = "standard"
     tier2_policy: str = "require_human"
     tier3_policy: str = "block"
+    reliability_mode: str = "normal"  # "limited": tier 1 and above need a person too (PLAN 4.4.1)
     sandbox_preset: str | None = None
     parse_retries: int = 3
     repair_steps: list[str] = Field(default_factory=list)  # runner-side repairs to switch on (PLAN 4.4.2)

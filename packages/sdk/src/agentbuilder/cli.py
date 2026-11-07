@@ -22,12 +22,15 @@ from agentbuilder.compile import (
     approval_needed,
     compile_agent,
     to_fabric_config,
+    to_guardrails_yaml,
     to_nat_yaml,
+    to_opa_bundle,
     to_openshell_policy,
     to_openshell_provider_profile,
     to_openshell_yaml,
     unapproved_live_tools,
 )
+from agentbuilder.evals import CaseResult
 from agentbuilder.gateway import LocalGateway, default_audit_log
 from agentbuilder.models import probe_tool_calling, resolve_model
 from agentbuilder.models.credentials import CredentialError
@@ -36,7 +39,7 @@ from agentbuilder.spec import AgentSpec, SpecError
 from agentbuilder.tools import ToolCatalog
 from agentbuilder.ui import MIN_NODE, UiSession, find_web_dir, node_version
 
-FORMATS = ("nat", "fabric", "policy", "provider")
+FORMATS = ("nat", "fabric", "policy", "provider", "opa", "guardrails")
 GOOGLE_HELP = """To sign in once (free; about 5 minutes):
   1. console.cloud.google.com -> new project -> APIs & Services -> enable: Gmail API, Google Calendar API, Sheets API
   2. OAuth consent screen -> External -> add yourself as a Test user
@@ -101,6 +104,11 @@ def cmd_compile(args: argparse.Namespace) -> int:
         print(to_nat_yaml(c), end="")
     elif args.format == "fabric":
         print(json.dumps(to_fabric_config(c), indent=2))
+    elif args.format == "opa":  # compiler D: one bundle directory's files, each under a "# file:" line
+        for name, content in to_opa_bundle(c).items():
+            print(f"# file: {name}\n{content}", end="")
+    elif args.format == "guardrails":
+        print(to_guardrails_yaml(c), end="")
     elif args.format == "policy":
         print(to_openshell_yaml(to_openshell_policy(c), "sandbox policy"), end="")
     else:
@@ -134,6 +142,50 @@ def cmd_run(args: argparse.Namespace) -> int:
         return 1
     print(result.text)
     return 0
+
+
+def cmd_eval(args: argparse.Namespace) -> int:
+    """The eval gate (PLAN 4.4.3). Exit 0: pass, 3: pass with limited mode, 1: block or a setup error."""
+    from agentbuilder.evals import load_suite, run_suite
+
+    spec = AgentSpec.load(args.spec)
+    name = args.suite or spec.evals.suite
+    if not name:
+        print("error: name a suite with --suite or evals.suite in the spec", file=sys.stderr)
+        return 1
+    try:
+        suite = load_suite(name)
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    # The spec's publish bar wins over the suite's default.
+    suite = suite.model_copy(
+        update={"thresholds": suite.thresholds.model_copy(update={"success": spec.evals.publish_threshold})}
+    )
+    catalog = load_catalog(args.tools)
+    if not args.live:  # an eval never touches Gmail, Calendar, Sheets or the web unless asked
+        catalog = LocalGateway().apply(catalog, mock=True, audit_log=default_audit_log())
+    compiled = compile_agent(spec, catalog)
+    if live := unapproved_live_tools(compiled):  # an eval has nobody to ask, call after call
+        print(f"error: {approval_needed(live)} (drop --live)", file=sys.stderr)
+        return 1
+    env = credential_env(spec, compiled)
+    print(
+        f"eval {suite.name}: {len(suite.cases)} cases on {compiled.model.model}; each is one real run", file=sys.stderr
+    )
+
+    def show(r: CaseResult) -> None:
+        print(f"{'PASS' if r.passed else 'FAIL'} {r.id:<14} {r.seconds:6.1f}s  {r.why}", file=sys.stderr)
+
+    report = run_suite(compiled, suite, runner=load_runner(args.runner), environ=env, on_case=show)
+    for key, rate in report.metrics.items():
+        print(f"{key:<15} {rate}")
+    tokens = f"{report.tokens_per_task:.0f}" if report.tokens_per_task is not None else "unknown"
+    print(f"latency p95     {report.latency_p95_s:.1f}s; tokens per task {tokens}")
+    print(f"gate: {report.gate.outcome.upper()}: {report.gate.reason}")
+    if args.json:
+        Path(args.json).write_text(report.model_dump_json(indent=2), encoding="utf-8")
+    return {"pass": 0, "pass_limited": 3}.get(report.gate.outcome, 1)
 
 
 def cmd_probe_model(args: argparse.Namespace) -> int:
@@ -268,6 +320,12 @@ def parser() -> argparse.ArgumentParser:
     r.add_argument("--runner", default="local")
     r.add_argument("--mock", action="store_true", help="tools return canned answers and touch nothing live")
     r.set_defaults(fn=cmd_run)
+    e = with_spec("eval", "run the spec's eval suite and apply the gate (mock tools unless --live)")
+    e.add_argument("--suite", help="a built-in suite name or a .yaml/.json file (default: evals.suite in the spec)")
+    e.add_argument("--runner", default="local")
+    e.add_argument("--live", action="store_true", help="real tools instead of mocks")
+    e.add_argument("--json", help="also write the full report to this file")
+    e.set_defaults(fn=cmd_eval)
     pm = sub.add_parser("probe-model", help="one real request: does the model work and can it use tools?")
     pm.add_argument("spec", help="path to an *.agent.yaml file")
     pm.set_defaults(fn=cmd_probe_model)  # no --tools: the probe sends its own test tool, not the agent's

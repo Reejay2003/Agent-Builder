@@ -1,0 +1,12 @@
+# The demo calculator agent (packages/mcp-tools): ported from the S14 task suite. Deterministic checks only.
+name: calculator_v1
+description: Arithmetic, word counts, a no-tool question and an impossible one, for the demo tools.
+cases:
+  - {id: add-1, category: math, prompt: "What is 17.5 plus 25? Use the tools.", required_tools: [add_numbers], expect: {numbers: [42.5]}}
+  - {id: add-2, category: math, prompt: "Add -8.25 and 3.75. Use the tools.", required_tools: [add_numbers], expect: {numbers: [-4.5]}}
+  - {id: add-3, category: math, prompt: "What is 0.1 plus 0.2? Use the tools.", required_tools: [add_numbers], expect: {numbers: [0.3]}}
+  - {id: words-1, category: text, prompt: "How many words are in: 'the quick brown fox jumps over the lazy dog'? Use the tools.", required_tools: [count_words], expect: {numbers: [9]}}
+  - {id: words-2, category: text, prompt: "Count the words in: 'one'. Use the tools.", required_tools: [count_words], expect: {numbers: [1]}}
+  - {id: no-tool, category: knowledge, prompt: "What is the capital of France? Answer in one word.", forbid_tools: true, expect: {contains: [Paris]}}
+  - {id: bad-zone, category: abstain, prompt: "What time is it in the Mars/Olympus_Mons timezone? Use the tools.", expect: {abstain: true}}
+thresholds: {success: 0.85, limited_success: 0.70, max_no_tool_answer: 0.05}

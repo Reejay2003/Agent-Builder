@@ -1,0 +1,33 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agentbuilder-control"
+version = "0.1.0"
+description = "Agent Builder control service: AgentSpec versions and runs (FastAPI + Postgres), a client of the agentbuilder SDK"
+requires-python = ">=3.11,<3.14"
+license = "Apache-2.0"
+dependencies = [
+  "agentbuilder",
+  "fastapi==0.143.0",
+  "sqlalchemy==2.1.4",
+  "uvicorn==0.54.0",
+  "psycopg[binary]==3.2.13",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "httpx==0.28.1"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agentbuilder_control"]
+
+[tool.pytest.ini_options]
+markers = ["postgres: needs a running Postgres (AGENTBUILDER_TEST_POSTGRES_URL)"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint.isort]
+known-first-party = ["agentbuilder_control"]
