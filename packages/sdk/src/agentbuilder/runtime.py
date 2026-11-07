@@ -12,7 +12,7 @@ from __future__ import annotations
 import os
 from collections.abc import Mapping, Sequence
 from importlib.metadata import entry_points
-from typing import Literal, Protocol
+from typing import TYPE_CHECKING, Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -20,6 +20,9 @@ from agentbuilder.compile.compiled import CompiledAgent
 from agentbuilder.models.credentials import SecretStore, redact, resolve_credential
 from agentbuilder.observe import Trajectory
 from agentbuilder.spec import AgentSpec
+
+if TYPE_CHECKING:
+    from agentbuilder.approvals import Approver
 
 RUNNER_GROUP = "agentbuilder.runners"
 
@@ -51,7 +54,17 @@ class RunResult(BaseModel):
 class Runner(Protocol):
     name: str
 
-    def run(self, compiled: CompiledAgent, prompt: str, *, environ: Mapping[str, str] | None = None) -> RunResult: ...
+    def run(
+        self,
+        compiled: CompiledAgent,
+        prompt: str,
+        *,
+        environ: Mapping[str, str] | None = None,
+        approve: Approver | None = None,
+    ) -> RunResult:
+        """`approve` is asked before each live call of a tool the spec says a person must approve (exact payload in
+        the request). Without it such a run is refused, never run unasked."""
+        ...
 
 
 def load_runner(name: str = "local") -> Runner:

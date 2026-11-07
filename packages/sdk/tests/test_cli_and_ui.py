@@ -49,7 +49,7 @@ def test_run_prints_the_answer_and_fails_with_a_message_when_the_run_fails(monke
         def __init__(self, result):
             self.result = result
 
-        def run(self, compiled, prompt, *, environ=None):
+        def run(self, compiled, prompt, *, environ=None, approve=None):
             return self.result
 
     monkeypatch.setenv("LLM_API_KEY", "k" * 20)
@@ -149,7 +149,7 @@ def test_run_mock_starts_every_tool_server_in_mock_mode(monkeypatch, capsys, tmp
     seen = []
 
     class Fake:
-        def run(self, compiled, prompt, *, environ=None):
+        def run(self, compiled, prompt, *, environ=None, approve=None):
             seen.append(compiled)
             return RunResult(status="succeeded", text="done")
 
@@ -196,7 +196,7 @@ def test_auth_google_without_a_client_file_explains_the_setup_steps(capsys):
     assert "Desktop app" in capsys.readouterr().err
 
 
-def test_a_live_cli_run_of_a_tier2_tool_is_refused_before_any_runner_starts(monkeypatch, capsys, tmp_path):
+def test_a_live_tier2_run_without_a_terminal_is_refused_before_any_runner_starts(monkeypatch, capsys, tmp_path):
     spec = tmp_path / "a.agent.yaml"
     spec.write_text(
         "spec_version: 1\nname: a\nmodel: {provider: openai, model: m, credential_ref: env://LLM_API_KEY}\n"
@@ -208,8 +208,21 @@ def test_a_live_cli_run_of_a_tier2_tool_is_refused_before_any_runner_starts(monk
     from agentbuilder.library import personal_catalog
 
     monkeypatch.setattr(cli, "load_catalog", lambda ref: personal_catalog())
+    monkeypatch.setattr(cli.sys.stdin, "isatty", lambda: False)  # a script or CI: no one to ask
     assert cli.main(["run", str(spec), "hi"]) == 1
-    assert "calendar.create_event need human approval" in capsys.readouterr().err
+    assert "calendar.create_event need a person to approve each call" in capsys.readouterr().err
+
+    seen = {}
+
+    class Runner:
+        def run(self, compiled, prompt, *, environ=None, approve=None):
+            seen["approve"] = approve
+            return RunResult(status="succeeded", text="done")
+
+    monkeypatch.setattr(cli.sys.stdin, "isatty", lambda: True)  # a person at a terminal: the run asks them
+    monkeypatch.setattr(cli, "load_runner", lambda name: Runner())
+    assert cli.main(["run", str(spec), "hi"]) == 0
+    assert callable(seen["approve"])
 
 
 def test_doctor_reports_a_missing_mcp_package(monkeypatch, capsys):

@@ -101,7 +101,7 @@ def test_tier3_tools_are_refused_by_default_and_allowed_when_explicitly_relaxed(
 
 def test_unenforced_approvals_are_warned_about_loudly():
     c = compile_agent(personal(), full_catalog())
-    assert any("calendar.create_event" in w and "NOT enforced" in w for w in c.warnings)
+    assert any("calendar.create_event" in w and "waits for a person to approve it" in w for w in c.warnings)
     quiet = AgentSpec.from_dict(
         {"name": "x", "model": {"provider": "openai", "model": "m"}, "tools": ["demo.add_numbers"]}
     )
@@ -113,7 +113,7 @@ def test_mutating_tools_are_warned_about_even_when_a_sandbox_preset_is_set():
     for extra in ({}, {"sandbox": {"policy_preset": "p"}}):
         warnings = compile_agent(AgentSpec.from_dict({**base, **extra}), full_catalog()).warnings
         assert any(
-            "gmail.send_draft" in w and "nothing restricts it yet" in w for w in warnings
+            "gmail.send_draft" in w and "only the sandbox runner limits" in w for w in warnings
         )  # a preset changes nothing yet
 
 

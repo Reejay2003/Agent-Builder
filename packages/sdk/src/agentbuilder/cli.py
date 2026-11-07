@@ -15,6 +15,7 @@ from importlib.util import find_spec
 from pathlib import Path
 
 from agentbuilder import __version__
+from agentbuilder.approvals import terminal_approver
 from agentbuilder.compile import (
     CompiledAgent,
     CompileError,
@@ -114,11 +115,13 @@ def cmd_run(args: argparse.Namespace) -> int:
         compiled = compile_agent(
             spec, LocalGateway().apply(load_catalog(args.tools), mock=True, audit_log=default_audit_log())
         )
-    if live := unapproved_live_tools(compiled):
+    # A live call that needs a person is asked here, in the terminal; with no terminal there is no one to ask.
+    approve = terminal_approver() if sys.stdin.isatty() else None
+    if approve is None and (live := unapproved_live_tools(compiled)):
         print(f"error: {approval_needed(live)} (--mock)", file=sys.stderr)
         return 1
     env = credential_env(spec, compiled)  # a missing key is reported before anything is started
-    result = load_runner(args.runner).run(compiled, args.prompt, environ=env)
+    result = load_runner(args.runner).run(compiled, args.prompt, environ=env, approve=approve)
     if result.trajectory:
         print(
             f"tools used: {', '.join(result.trajectory.tools_used) or 'none'}; tokens: {result.total_tokens}",

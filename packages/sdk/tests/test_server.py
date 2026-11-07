@@ -29,7 +29,7 @@ class FakeRunner:
     def __init__(self):
         self.calls: list[tuple[str, dict[str, str]]] = []
 
-    def run(self, compiled: CompiledAgent, prompt: str, *, environ=None) -> RunResult:
+    def run(self, compiled: CompiledAgent, prompt: str, *, environ=None, approve=None) -> RunResult:
         self.calls.append((prompt, dict(environ or {})))
         return RunResult(status="succeeded", text="42.5", trajectory=load(FIXTURES / "relay_tool_calling.json"))
 

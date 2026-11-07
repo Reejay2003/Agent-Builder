@@ -21,7 +21,15 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
 from agentbuilder import __version__
-from agentbuilder.compile import CompiledAgent, CompileError, approval_needed, compile_agent, unapproved_live_tools
+from agentbuilder.approvals import ApprovalRequest, with_approvals
+from agentbuilder.compile import (
+    APPROVAL_TIMEOUT,
+    CompiledAgent,
+    CompileError,
+    approval_needed,
+    compile_agent,
+    unapproved_live_tools,
+)
 from agentbuilder.gateway import Gateway, LocalGateway
 from agentbuilder.models import ProbeResult, probe_tool_calling, resolve_model
 from agentbuilder.models.credentials import CredentialError, SecretStore
@@ -82,6 +90,23 @@ class _Invalid(Exception):
 
 
 @dataclass
+class _Approval:
+    request: ApprovalRequest
+    status: str = "pending"  # then approved, declined or expired
+    answered: threading.Event = field(default_factory=threading.Event)
+
+    def public(self) -> dict[str, Any]:
+        r = self.request
+        return {
+            "id": r.id,
+            "tool_id": r.tool_id,
+            "risk_tier": r.risk_tier,
+            "arguments": r.arguments,
+            "status": self.status,
+        }
+
+
+@dataclass
 class _Run:
     id: str
     status: str = "running"
@@ -89,11 +114,40 @@ class _Run:
     error: str | None = None
     warnings: tuple[str, ...] = ()
     trace: dict[str, Any] | None = None
+    approvals: dict[str, _Approval] = field(default_factory=dict)
+    _lock: threading.Lock = field(default_factory=threading.Lock)
+
+    def ask(self, request: ApprovalRequest) -> bool:
+        """The run's approver: park the request for the web app and wait for `decide` (or the timeout: no)."""
+        pending = _Approval(request)
+        with self._lock:
+            self.approvals[request.id] = pending
+        # Give up a little before the tool does, so the web app never shows "approved" for a call that timed out.
+        pending.answered.wait(max(APPROVAL_TIMEOUT - 10, APPROVAL_TIMEOUT / 2))
+        with self._lock:
+            if pending.status == "pending":
+                pending.status = "expired"
+            return pending.status == "approved"
+
+    def decide(self, approval_id: str, approved: bool) -> tuple[int, Any]:
+        with self._lock:
+            pending = self.approvals.get(approval_id)
+            if pending is None:
+                return 404, {"ok": False, "errors": [{"field": "approval_id", "message": "unknown approval"}]}
+            if pending.status != "pending":
+                return 409, {"ok": False, "errors": [{"field": "", "message": f"already {pending.status}"}]}
+            pending.status = "approved" if approved else "declined"
+        pending.answered.set()
+        return 200, {"ok": True, "status": pending.status}
 
     def public(self) -> dict[str, Any]:
+        with self._lock:
+            approvals = [a.public() for a in self.approvals.values()]
+        waiting = self.status == "running" and any(a["status"] == "pending" for a in approvals)
         return {
             "run_id": self.id,
-            "status": self.status,
+            "status": "waiting_for_approval" if waiting else self.status,
+            "approvals": approvals,
             "text": self.text,
             "error": self.error,
             "warnings": list(self.warnings),
@@ -196,7 +250,9 @@ class LocalServer:
         except ValueError as exc:
             raise _Invalid([{"field": "mock", "message": str(exc)}]) from exc
         spec, compiled = self._compile(body.get("spec"), catalog)
-        if live := unapproved_live_tools(compiled):
+        # Live calls that need a person are asked through the run (see `decide_approval`). Only a tool on a server the
+        # SDK did not build cannot ask, so that one is refused up front.
+        if live := unapproved_live_tools(with_approvals(compiled, "-")):
             raise _Invalid([{"field": "mock", "message": approval_needed(live)}])
         run = _Run(id=uuid.uuid4().hex)
         with self._lock:
@@ -213,7 +269,7 @@ class LocalServer:
     def _execute(self, run: _Run, spec: AgentSpec, compiled: CompiledAgent, prompt: str) -> None:
         try:
             env = credential_env(spec, compiled, environ=self.environ, stores=self.stores)
-            result = self.runner_factory().run(compiled, prompt, environ=env)
+            result = self.runner_factory().run(compiled, prompt, environ=env, approve=run.ask)
             run.text, run.error, run.warnings, run.trace = (
                 result.text,
                 result.error,
@@ -225,6 +281,17 @@ class LocalServer:
             run.error, run.status = str(exc), "failed"
         except Exception as exc:
             run.error, run.status = f"unexpected {type(exc).__name__}", "failed"
+
+    def decide_approval(self, run_id: str, approval_id: str, body: Mapping[str, Any]) -> tuple[int, Any]:
+        """`POST /runs/<run>/approvals/<approval>` with `{"approved": true|false}`: a person's answer."""
+        approved = body.get("approved")
+        if not isinstance(approved, bool):
+            raise _Invalid([{"field": "approved", "message": "approved must be true or false"}])
+        with self._lock:
+            run = self._runs.get(run_id)
+        if run is None:
+            return 404, {"ok": False, "errors": [{"field": "run_id", "message": "unknown run"}]}
+        return run.decide(approval_id, approved)
 
     def get_run(self, run_id: str) -> tuple[int, Any]:
         with self._lock:
@@ -320,7 +387,14 @@ def _handler(app: LocalServer) -> type[BaseHTTPRequestHandler]:
             if self._refuse():
                 return
             path = self.path.split("?")[0]
-            routes = {"/spec/validate": app.validate, "/runs": app.start_run, "/model/check": app.check_model}
+            routes: dict[str, Callable[[Mapping[str, Any]], tuple[int, Any]]] = {
+                "/spec/validate": app.validate,
+                "/runs": app.start_run,
+                "/model/check": app.check_model,
+            }
+            parts = path.split("/")  # /runs/<run>/approvals/<approval>
+            if len(parts) == 5 and parts[1] == "runs" and parts[3] == "approvals":
+                routes[path] = lambda body: app.decide_approval(parts[2], parts[4], body)
             if path not in routes:
                 self._send(404, {"ok": False, "errors": [{"field": "", "message": "no such endpoint"}]})
                 return

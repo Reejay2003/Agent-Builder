@@ -5,7 +5,7 @@ ran, independent of what the model said. `--mock` returns each tool's `mock_resp
 test mode must never touch live systems (PLAN 7.3).
 
     if __name__ == "__main__":
-        main([add_numbers, count_words])          # reads --log PATH and --mock from the command line
+        main([add_numbers, count_words])          # reads --log PATH, --mock and --approvals DIR --approve IDS
 """
 
 from __future__ import annotations
@@ -27,7 +27,9 @@ from agentbuilder.tools.manifest import ensure_unique
 MAX_LOG_BYTES = 10 * 1024 * 1024  # the audit log rotates at 10 MB and keeps one older file
 
 
-def _audit(path: str | None, tool: Tool, arguments: dict[str, Any], mock: bool, log_args: bool) -> None:
+def _audit(
+    path: str | None, tool: Tool, arguments: dict[str, Any], mock: bool, log_args: bool, approval: str | None = None
+) -> None:
     """Append one JSON line per call. Argument VALUES are not written unless `log_args` (they may hold passwords or
     message bodies); the file is created private (0600). Past MAX_LOG_BYTES the file becomes `<name>.1` (replacing
     the previous one) and a new file starts, so the log never takes more than about twice that."""
@@ -36,17 +38,21 @@ def _audit(path: str | None, tool: Tool, arguments: dict[str, Any], mock: bool, 
 
         args = arguments if log_args else {k: f"{type(v).__name__}({len(str(v))})" for k, v in arguments.items()}
         record = {"t": time.time(), "tool": tool.mcp_name, "id": tool.id, "args": args, "mock": mock}
-        fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
-        os.fchmod(fd, 0o600)  # also tightens a file that already existed with wider permissions
-        with os.fdopen(fd, "a", encoding="utf-8") as f:
-            fcntl.flock(f, fcntl.LOCK_EX)  # tool servers of several runs share this file
-            mine = os.fstat(f.fileno())
-            # Rotate only if `path` is still the file we hold: another server may have rotated it while we waited.
-            if mine.st_size >= MAX_LOG_BYTES:
-                with contextlib.suppress(FileNotFoundError):  # already rotated away: nothing to do
+        if approval:
+            record["approval"] = approval  # approved, declined or expired
+        for attempt in range(2):  # a full file is rotated, then the line goes into the fresh one
+            fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
+            os.fchmod(fd, 0o600)  # also tightens a file that already existed with wider permissions
+            with os.fdopen(fd, "a", encoding="utf-8") as f:
+                fcntl.flock(f, fcntl.LOCK_EX)  # tool servers of several runs share this file
+                mine = os.fstat(f.fileno())
+                if mine.st_size < MAX_LOG_BYTES or attempt:
+                    f.write(json.dumps(record, default=str) + "\n")
+                    return
+                # Rotate only if `path` is still the file we hold: another server may have rotated it while we waited.
+                with contextlib.suppress(FileNotFoundError):
                     if os.path.samestat(mine, os.stat(path)):
-                        os.replace(path, f"{path}.1")  # this line lands in our (now `.1`) file
-            f.write(json.dumps(record, default=str) + "\n")
+                        os.replace(path, f"{path}.1")
 
 
 def _recent_calls(times: list[float], now: float) -> list[float]:
@@ -79,7 +85,10 @@ def _take_slot(path: Path | None, memory: list[float], limit: int) -> bool:
     return allowed
 
 
-def _wrap(tool: Tool, log_path: str | None, mock: bool, log_args: bool) -> Callable[..., Any]:
+def _wrap(
+    tool: Tool, log_path: str | None, mock: bool, log_args: bool, approvals: str | None = None
+) -> Callable[..., Any]:
+    """`approvals`: the run's approval folder when a person must approve each live call of this tool."""
     limit = tool.manifest.rate_limits.per_minute
     counter = Path(log_path).with_name("rate-limits") / tool.id if log_path else None
     memory: list[float] = []
@@ -91,7 +100,17 @@ def _wrap(tool: Tool, log_path: str | None, mock: bool, log_args: bool) -> Calla
             with lock:
                 if not _take_slot(counter, memory, limit):
                     raise RuntimeError(f"{tool.id} is limited to {limit} calls a minute; wait a little and try again")
-        _audit(log_path, tool, kwargs or {"_positional": list(args)}, mock, log_args)
+        arguments = kwargs or {"_positional": list(args)}
+        approval = None
+        if approvals and not mock:  # after the rate limit, so a looping model cannot flood a person with requests
+            from agentbuilder.approvals import wait_for_approval
+
+            approval = wait_for_approval(approvals, tool.id, tool.manifest.risk_tier, arguments)
+        _audit(log_path, tool, arguments, mock, log_args, approval)
+        if approval == "declined":
+            raise RuntimeError(f"a person declined this {tool.id} call, so it did not run; do not try it again")
+        if approval == "expired":
+            raise RuntimeError(f"no one approved this {tool.id} call in time, so it did not run")
         return tool.manifest.mock_response if mock else tool.fn(*args, **kwargs)
 
     return run
@@ -104,7 +123,10 @@ def build_server(
     log_path: str | None = None,
     mock: bool = False,
     log_args: bool = False,
+    approvals: str | None = None,
+    approve: Sequence[str] = (),
 ) -> Any:
+    """`approvals` + `approve`: the run's approval folder and the ids of the tools that must ask a person first."""
     try:
         from mcp.server.fastmcp import FastMCP
     except ImportError as exc:  # pragma: no cover - exercised only without the extra
@@ -116,13 +138,25 @@ def build_server(
         )
     server = FastMCP(name)
     for t in tools:
-        server.add_tool(_wrap(t, log_path, mock, log_args), name=t.mcp_name, description=t.manifest.description_plain)
+        asks = approvals if t.id in approve else None
+        server.add_tool(
+            _wrap(t, log_path, mock, log_args, asks), name=t.mcp_name, description=t.manifest.description_plain
+        )
     return server
 
 
 def main(tools: Sequence[Tool], *, name: str = "agentbuilder-tools", argv: Sequence[str] | None = None) -> None:
     args = list(sys.argv[1:] if argv is None else argv)
-    log_path = args[args.index("--log") + 1] if "--log" in args else None
-    build_server(tools, name=name, log_path=log_path, mock="--mock" in args, log_args="--log-args" in args).run(
-        transport="stdio"
-    )
+
+    def value(flag: str) -> str | None:
+        return args[args.index(flag) + 1] if flag in args else None
+
+    build_server(
+        tools,
+        name=name,
+        log_path=value("--log"),
+        mock="--mock" in args,
+        log_args="--log-args" in args,
+        approvals=value("--approvals"),
+        approve=(value("--approve") or "").split(","),
+    ).run(transport="stdio")

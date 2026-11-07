@@ -17,11 +17,19 @@ import os
 import sys
 import tempfile
 import threading
+import uuid
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from pathlib import Path
 
-from agentbuilder.compile import CompiledAgent, approval_needed, to_fabric_config, unapproved_live_tools
+from agentbuilder.approvals import ApprovalWatcher, Approver, with_approvals
+from agentbuilder.compile import (
+    CompiledAgent,
+    approval_needed,
+    needs_approval,
+    to_fabric_config,
+    unapproved_live_tools,
+)
 from agentbuilder.observe import Trajectory, TrajectoryError, load
 from agentbuilder.runtime import RunResult, redact_values
 
@@ -55,15 +63,25 @@ class LocalRunner:
         """`keep_dir`: write run artifacts (events, trajectory) there instead of a temporary directory."""
         self._keep_dir = Path(keep_dir) if keep_dir else None
 
-    def run(self, compiled: CompiledAgent, prompt: str, *, environ: Mapping[str, str] | None = None) -> RunResult:
+    def run(
+        self,
+        compiled: CompiledAgent,
+        prompt: str,
+        *,
+        environ: Mapping[str, str] | None = None,
+        approve: Approver | None = None,
+    ) -> RunResult:
         """Blocking run. Do not call from inside a running event loop (use `arun`)."""
-        return asyncio.run(self.arun(compiled, prompt, environ=environ))
+        return asyncio.run(self.arun(compiled, prompt, environ=environ, approve=approve))
 
     async def arun(
-        self, compiled: CompiledAgent, prompt: str, *, environ: Mapping[str, str] | None = None
+        self,
+        compiled: CompiledAgent,
+        prompt: str,
+        *,
+        environ: Mapping[str, str] | None = None,
+        approve: Approver | None = None,
     ) -> RunResult:
-        if live := unapproved_live_tools(compiled):  # the last line of defence, whoever called us
-            return RunResult(status="failed", error=approval_needed(live))
         env = dict(os.environ if environ is None else environ)
         key_name = compiled.model.api_key_env
         secrets = {key_name: env[key_name]} if key_name and key_name in env else {}
@@ -75,9 +93,22 @@ class LocalRunner:
             )
         if self._keep_dir:
             self._keep_dir.mkdir(parents=True, exist_ok=True)
-            return await self._run_in(self._keep_dir, compiled, prompt, secrets)
+            return await self._asking(self._keep_dir, compiled, prompt, secrets, approve)
         with tempfile.TemporaryDirectory(prefix="agentbuilder-run-") as tmp:
-            return await self._run_in(Path(tmp), compiled, prompt, secrets)
+            return await self._asking(Path(tmp), compiled, prompt, secrets, approve)
+
+    async def _asking(
+        self, out: Path, compiled: CompiledAgent, prompt: str, secrets: Mapping[str, str], approve: Approver | None
+    ) -> RunResult:
+        folder = out / f"approvals-{uuid.uuid4().hex[:8]}"  # private to this run; holds the real argument values
+        if approve is not None and needs_approval(compiled):
+            compiled = with_approvals(compiled, folder)
+        if live := unapproved_live_tools(compiled):  # the last line of defence, whoever called us
+            return RunResult(status="failed", error=approval_needed(live))
+        if approve is None or not needs_approval(compiled):
+            return await self._run_in(out, compiled, prompt, secrets)
+        with ApprovalWatcher(folder, approve):
+            return await self._run_in(out, compiled, prompt, secrets)
 
     async def _run_in(self, out: Path, compiled: CompiledAgent, prompt: str, secrets: Mapping[str, str]) -> RunResult:
         try:
@@ -102,7 +133,10 @@ class LocalRunner:
 
         warnings: list[str] = []
         trajectory = _read_trajectory(out, warnings)
+        if trajectory is not None and secrets:  # a provider may echo the key back in an error the trajectory records
+            trajectory = Trajectory.model_validate_json(redact_values(trajectory.model_dump_json(), secrets))
         text = (outcome.get("output") or {}).get("response")
+        text = redact_values(text, secrets) if text else text
         for fix in (outcome.get("output") or {}).get("repairs") or []:  # a repair is never silent
             warnings.append(f"repaired: the model asked for {fix.get('requested')!r}, used {fix.get('resolved')!r}")
         if outcome.get("status") == "succeeded":

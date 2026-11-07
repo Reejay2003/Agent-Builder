@@ -11,6 +11,7 @@ from typing import Any
 import yaml
 
 from agentbuilder.compile.compiled import CompiledAgent
+from agentbuilder.compile.compiler import APPROVAL_TIMEOUT
 
 _WORKFLOW_TYPE = {"tool_calling": "tool_calling_agent", "react": "react_agent"}
 
@@ -23,6 +24,8 @@ def to_nat_workflow(c: CompiledAgent) -> dict[str, Any]:
             "server": {"transport": "stdio", "command": server.command, "args": list(server.args)},
             "include": [t.mcp_name for t in c.tools_for(server.name)],
         }
+        if "--approvals" in server.args:  # the call waits for a person; NAT's default limit is 60 seconds
+            function_groups[server.name]["tool_call_timeout"] = int(APPROVAL_TIMEOUT) + 60
     llm: dict[str, Any] = {"_type": "openai", "model_name": c.model.model, "base_url": c.model.base_url}
     if c.model.api_key_env:
         llm["api_key"] = "${" + c.model.api_key_env + "}"

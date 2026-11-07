@@ -72,14 +72,10 @@ def compile_agent(
                 "remove the tool or set tier3_destructive: require_human"
             )
         if tier >= 2 and spec.approvals.tier2_external_comms == "require_human":
-            warnings.append(
-                f"tool {t.id} is tier {tier} and needs human approval, but approval enforcement arrives in SDK 0.3: "
-                "it is NOT enforced yet"
-            )
+            warnings.append(f"tool {t.id} is tier {tier}: every live call waits for a person to approve it")
         if tier >= 1:
             warnings.append(
-                f"tool {t.id} can change things (tier {tier}); sandbox policy arrives in SDK 0.3, "
-                "nothing restricts it yet"
+                f"tool {t.id} can change things (tier {tier}); only the sandbox runner limits its network access"
             )
 
     steps = spec.model.reliability.repair.steps
@@ -130,25 +126,31 @@ def compile_agent(
     )
 
 
-def unapproved_live_tools(c: CompiledAgent) -> list[str]:
-    """Tools that would act on a live system although the spec says a human must approve them first.
+APPROVAL_TIMEOUT = 600.0  # seconds a tool waits for a person; then the call is declined and never runs
 
-    Approvals arrive in SDK 0.3; until then every caller (server, CLI, runners) refuses such a run instead of acting
-    unasked. A tool is live unless its server runs in mock mode (`--mock`, added by the gateway)."""
-    mocked = {s.name for s in c.servers if "--mock" in s.args}
+
+def needs_approval(c: CompiledAgent) -> list[str]:
+    """Tool ids whose live calls a person must approve first, by the spec's approval rules."""
     return [
         t.id
         for t in c.tools
-        if t.server not in mocked
-        and (
-            (t.risk_tier == 2 and c.tier2_policy == "require_human")
-            or (t.risk_tier >= 3 and c.tier3_policy == "require_human")
-        )
+        if (t.risk_tier == 2 and c.tier2_policy == "require_human")
+        or (t.risk_tier >= 3 and c.tier3_policy == "require_human")
     ]
+
+
+def unapproved_live_tools(c: CompiledAgent) -> list[str]:
+    """Tools that would act on a live system with nobody asked first. Every caller (server, CLI, runners) refuses
+    such a run. A tool is covered when its server runs in mock mode (`--mock`, added by the gateway) or asks for
+    approval (`--approvals`, added by a runner that was given an approver; see `agentbuilder.approvals`)."""
+    covered = {s.name for s in c.servers if "--mock" in s.args or "--approvals" in s.args}
+    by_id = {t.id: t for t in c.tools}
+    return [i for i in needs_approval(c) if by_id[i].server not in covered]
 
 
 def approval_needed(tool_ids: list[str]) -> str:
     return (
-        f"live runs of {', '.join(tool_ids)} need human approval, which arrives in SDK 0.3: run in mock mode, "
+        f"live runs of {', '.join(tool_ids)} need a person to approve each call, and this run has no one to ask: "
+        "run it with `ab run` in a terminal or through the local server (the web app asks), use mock mode, "
         "or set approvals.tier2_external_comms to allow"
     )

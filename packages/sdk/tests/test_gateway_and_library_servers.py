@@ -151,7 +151,7 @@ class Capture:
     def __init__(self):
         self.compiled = []
 
-    def run(self, compiled, prompt, *, environ=None):
+    def run(self, compiled, prompt, *, environ=None, approve=None):
         self.compiled.append(compiled)
         return RunResult(status="succeeded", text="ok")
 
@@ -197,24 +197,80 @@ def test_a_non_boolean_mock_is_a_field_error():
     assert bad.value.problems[0]["field"] == "mock"
 
 
-def test_live_run_of_a_tier2_tool_is_refused_until_approvals_exist_but_mock_and_allow_work():
-    from agentbuilder.library import personal_catalog
-    from agentbuilder.server.app import _Invalid
+def test_a_live_tier2_run_waits_for_the_web_app_to_approve_and_shows_the_exact_payload():
+    from agentbuilder.approvals import ApprovalRequest
+
+    answers = []
+
+    class Asking:
+        name = "asking"
+
+        def run(self, compiled, prompt, *, environ=None, approve=None):
+            request = ApprovalRequest(
+                id="a1", tool_id="calendar.create_event", risk_tier=2, arguments={"title": "Lunch"}, created=0
+            )
+            answers.append(approve(request))  # blocks until the web app answers, like the tool server does
+            return RunResult(status="succeeded", text="ok")
 
     spec = {**SPEC, "tools": ["calendar.create_event"]}
-    capture = Capture()
     app = LocalServer(
-        token="t",
-        catalog=personal_catalog(),
-        runner_factory=lambda: capture,
-        environ={"OPENAI_API_KEY": "k" * 20},
+        token="t", catalog=personal_catalog(), runner_factory=Asking, environ={"OPENAI_API_KEY": "k" * 20}
     )
     try:
-        with pytest.raises(_Invalid) as bad:
+        status, started = app.start_run({"spec": spec, "prompt": "hi", "mock": False})
+        assert status == 202
+        rid = started["run_id"]
+        for _ in range(100):
+            run = app.get_run(rid)[1]
+            if run["status"] == "waiting_for_approval":
+                break
+            time.sleep(0.02)
+        assert run["approvals"] == [
+            {
+                "id": "a1",
+                "tool_id": "calendar.create_event",
+                "risk_tier": 2,
+                "arguments": {"title": "Lunch"},
+                "status": "pending",
+            }
+        ]
+        assert app.decide_approval(rid, "nope", {"approved": True})[0] == 404
+        assert app.decide_approval("nope", "a1", {"approved": True})[0] == 404
+        assert app.decide_approval(rid, "a1", {"approved": True}) == (200, {"ok": True, "status": "approved"})
+        assert app.decide_approval(rid, "a1", {"approved": False})[0] == 409  # one answer only
+        for _ in range(100):
+            run = app.get_run(rid)[1]
+            if run["status"] == "succeeded":
+                break
+            time.sleep(0.02)
+        assert answers == [True] and run["approvals"][0]["status"] == "approved"
+    finally:
+        app.shutdown()
+
+
+def test_an_unanswered_approval_expires_as_a_no(monkeypatch):
+    from agentbuilder.approvals import ApprovalRequest
+    from agentbuilder.server import app as app_module
+
+    monkeypatch.setattr(app_module, "APPROVAL_TIMEOUT", 0.05)
+    run = app_module._Run(id="r")
+    request = ApprovalRequest(id="a", tool_id="x.y", risk_tier=2, arguments={}, created=0)
+    assert run.ask(request) is False and run.approvals["a"].status == "expired"
+
+
+def test_a_tier2_tool_on_a_server_the_sdk_did_not_build_is_refused_live_but_mock_and_allow_work():
+    from agentbuilder.server.app import _Invalid
+    from agentbuilder.tools.catalog import McpServerBinding
+
+    manifest = next(t.manifest for t in personal_catalog().resolve(["calendar.create_event"]))
+    byo = ToolCatalog().add_server(McpServerBinding(name="calendar", command="their-server", args=[]), [manifest])
+    spec = {**SPEC, "tools": ["calendar.create_event"]}
+    capture = Capture()
+    app = LocalServer(token="t", catalog=byo, runner_factory=lambda: capture, environ={"OPENAI_API_KEY": "k" * 20})
+    try:
+        with pytest.raises(_Invalid) as bad:  # it would ignore --approvals, so it could not ask
             app.start_run({"spec": spec, "prompt": "hi", "mock": False})
-        assert bad.value.problems[0]["field"] == "mock"
         assert "calendar.create_event" in bad.value.problems[0]["message"] and not capture.compiled
-        assert run_and_wait(app, {"spec": spec, "prompt": "hi"})["status"] == "succeeded"  # mock is fine
         allowed = {**spec, "approvals": {"tier2_external_comms": "allow"}}
         assert run_and_wait(app, {"spec": allowed, "prompt": "hi", "mock": False})["status"] == "succeeded"
     finally:
@@ -232,7 +288,7 @@ def test_only_finished_runs_are_forgotten_and_too_many_waiting_runs_are_refused(
     class Slow:
         name = "slow"
 
-        def run(self, compiled, prompt, *, environ=None):
+        def run(self, compiled, prompt, *, environ=None, approve=None):
             release.wait(10)
             return RunResult(status="succeeded", text=prompt)
 

@@ -179,7 +179,10 @@ def test_both_runners_refuse_a_live_tier2_tool_without_approval_even_if_the_call
     fake = FakeOpenShell()
     for runner in (LocalRunner(), SandboxRunner(run=fake)):
         result = runner.run(live, "hi", environ={"K": KEY})
-        assert not result.ok and "need human approval" in result.error
+        assert not result.ok and "need a person to approve each call" in result.error
+    # The sandbox's tool servers run inside the VM, where the host cannot watch an approval folder: still refused.
+    result = SandboxRunner(run=fake).run(live, "hi", environ={"K": KEY}, approve=lambda request: True)
+    assert not result.ok and "the sandbox runner cannot ask for approvals yet" in result.error
     assert fake.calls == []  # no sandbox, no provider holding the key
 
 

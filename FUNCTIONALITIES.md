@@ -23,6 +23,7 @@ machine), and records exactly what the agent did. A local web app is the friendl
 ```
 
 ## Recent additions (newest first)
+- 2026-11-07 · F18 rewritten: real human approvals (tool server waits, `ab run` asks in the terminal, the server queues for the web app). F4: the trajectory is redacted too. F14, F15: real-model results.
 - 2026-11-07 · F5, F6 updated: the audit log rotates at 10 MB; `web.search` checks the result-list markup, not the words "No results".
 - 2026-11-07 · F18 One approval rule for server, CLI and both runners.
 - 2026-11-07 · F17 A key is never sent over plain http to a public host.
@@ -54,7 +55,7 @@ machine), and records exactly what the agent did. A local web app is the friendl
 | F15 | Runtime | SandboxRunner (OpenShell microVM) |
 | F16 | Process | Automatic daily work log |
 | F17 | Models | No API key over plain http to a public host |
-| F18 | Safety | One "needs approval" rule for every way of running |
+| F18 | Safety | Human approvals: the pause happens inside the tool server |
 
 ---
 
@@ -102,7 +103,7 @@ machine), and records exactly what the agent did. A local web app is the friendl
 - **Added:** SDK weeks 1–3 · **Status:** done
 - **What it is:** Keys are named, not stored: `env://OPENAI_API_KEY` or `secret://modelcfg/<id>/api_key`.
 - **Why we built it:** A key once arrived garbled (pasted over two lines), and specs get shared; keys must not live in them or in logs.
-- **How it works:** 1) `resolve_credential` reads `env://` from the environment or `secret://` from a store, falling back to `AGENTBUILDER_SECRET_<PATH>`. 2) A value with spaces or line breaks inside is refused with a clear message. 3) The value is held in a `Secret` object that prints as `****`. 4) `redact()` scrubs any text before it is logged or returned. 5) The web app's vault is read by `LocalVaultStore` over loopback (`GET /api/internal/secrets/<name>`), never following redirects.
+- **How it works:** 1) `resolve_credential` reads `env://` from the environment or `secret://` from a store, falling back to `AGENTBUILDER_SECRET_<PATH>`. 2) A value with spaces or line breaks inside is refused with a clear message. 3) The value is held in a `Secret` object that prints as `****`. 4) `redact()` scrubs any text before it is logged or returned, including the run's trajectory: a provider that rejects a key can echo it back in its error, and the trajectory records that error (found by CI on Linux, 2026-11-07). 5) The web app's vault is read by `LocalVaultStore` over loopback (`GET /api/internal/secrets/<name>`), never following redirects.
 - **Decisions and trade-offs:** The local server resolves `env://` from an empty environment by default, so a shared spec cannot read the server's own variables.
 - **Limits:** The vault side is the web app's work (a colleague's), not finished by the SDK.
 - **Where:** `models/credentials.py`, `models/vault.py`, `runtime.credential_env`.
@@ -233,7 +234,7 @@ machine), and records exactly what the agent did. A local web app is the friendl
 - **Limits:** ReAct mode only (the compiler warns for tool calling). In our earlier 60-run test the name repair never triggered, so its benefit is unproven. Repair cannot fix wrong answers or answers given without calling a tool.
 - **Where:** `compile/compiler.py`, `agentbuilder_nat/local.py`, `nemo_fabric_adapters/nat/repair.py`, `repair.py` (retry helper).
 - **Proof:** compile tests, adapter tests, a runner test that the switch reaches the adapter and repairs appear in warnings [verified].
-- **Not verified:** that repair earns its cost on real models.
+- **Not verified:** that repair earns its cost on real models. One real ReAct run (`gpt-4.1-mini`, 2026-11-07) used 5470 tokens against 1252 in tool-calling mode, never called a tool, and no name repair fired.
 - **Interview angle:** *What must a repair never do?* Change meaning. *How do you know it helps?* We do not yet; it is off by default and every use is visible so the rate can be measured.
 
 ### F15. SandboxRunner (OpenShell microVM)
@@ -245,7 +246,7 @@ machine), and records exactly what the agent did. A local web app is the friendl
 - **Limits:** Only the SDK's tool servers; the audit log is not collected; a provider left by a killed run holds the key until the next sandbox run sweeps it.
 - **Where:** `packages/sdk-nat/src/agentbuilder_nat/sandbox.py`, `sandbox_main.py`, `packages/sdk-nat/sandbox/Dockerfile`, `make sandbox-image-sdk`.
 - **Proof:** 9 tests, 8 without a real sandbox (key never in argv, prompt only on stdin, provider sweep, names within 19 characters); on a real microVM the agent succeeded with a mock Gmail tool and a fake model reached through `host.openshell.internal`, the key appeared nowhere in the result, and no per-run provider remained [verified].
-- **Not verified:** the proxy injecting the real key in this runner (proven in the earlier spike with the owner's key, not re-run here); a real model.
+- **Not verified:** none for the key path: a real run with OpenAI `gpt-4.1-mini` succeeded in the microVM with the key injected by the proxy, and the key appeared nowhere in the output [verified 2026-11-07].
 - **Interview angle:** *How does the agent call the model without holding the key?* The proxy outside the agent adds it. *Why a microVM and not a container?* Its own kernel and no network device, so the policy cannot be bypassed by a shared kernel or a raw socket.
 
 ### F17. No API key over plain http to a public host
@@ -260,17 +261,17 @@ machine), and records exactly what the agent did. A local web app is the friendl
 - **Not verified:** none for this part.
 - **Interview angle:** *Why not just require https?* Local models (Ollama, a box on your network) usually speak plain http, and there the key does not cross the internet. *Why in the spec and not in the HTTP client?* Every path loads a spec; not every path uses the same client.
 
-### F18. One "needs approval" rule for every way of running
-- **Added:** 2026-11-07 · **Status:** done until approvals exist (SDK 0.3)
-- **What it is:** PLAN says tier-2 actions wait for a human (approval queue, SDK 0.3). Until that exists we went further than "warn": every way of running refuses a live tier-2 tool. The plan does not describe this interim guard.
-- **Why we built it:** At first only the server refused; `ab run` and both runners accepted the same live run, so the rule depended on which door you used.
-- **How it works:** 1) `unapproved_live_tools(compiled)` lists tools that are tier 2 with `tier2_external_comms: require_human` (or tier 3 with `tier3_destructive: require_human`) and whose server is not in mock mode. 2) The server (422), `ab run` (exit 1, before any runner starts), `LocalRunner` and `SandboxRunner` (failed result, nothing started, no provider created) all call it. 3) Mock runs and `tier2_external_comms: allow` pass.
-- **Decisions and trade-offs:** Refuse rather than act unasked. The check reads only the compiled agent, so the runners stay safe even if a new caller forgets it.
-- **Limits:** It is a blanket refusal; real per-action approvals are SDK 0.3.
-- **Where:** `compile/compiler.py` (`unapproved_live_tools`, `approval_needed`), `server/app.py`, `cli.py`, `agentbuilder_nat/local.py`, `agentbuilder_nat/sandbox.py`.
-- **Proof:** tests for the function, the server (mutation-checked), the CLI, and both runners [verified].
-- **Not verified:** none for this part.
-- **Interview angle:** *Why check in the runner too?* Defence in depth: the last line before anything acts. *What is prompt injection here?* A mail the agent reads could ask it to create an event with private data in the title; tier-2 tools are exactly the ones that contact other people.
+### F18. Human approvals: the pause happens inside the tool server
+- **Added:** 2026-11-07 (replaces the interim "refuse every live tier-2 run" guard of the same day) · **Status:** done for `LocalRunner`, `ab run` and the local server; not in the sandbox runner
+- **What it is:** PLAN §16.4 and §7.5 say tier-2 actions call an `approve` callback with the exact payload and show in an approval queue. This entry covers HOW we built it, which the plan does not say: the wait happens in the tool server, and the two sides talk through a private folder.
+- **Why we built it:** Tier-2 tools (for example `calendar.create_event`) contact other people. A mail the agent reads can carry instructions (prompt injection), so a person must see the exact call before it happens.
+- **How it works:** 1) `needs_approval(compiled)` lists tools a person must approve: tier 2 under `tier2_external_comms: require_human`, tier 3 under `tier3_destructive: require_human`. 2) `runner.run(..., approve=callback)`: `LocalRunner` makes a private folder for the run (0700) and `with_approvals` adds `--approvals <folder> --approve <tool ids>` to each live SDK-built tool server holding such a tool. 3) Compiler A raises NAT's tool-call timeout for those servers (60 s by default) to 10 minutes plus a margin. 4) Before such a tool runs live, the tool server first applies the rate limit, then writes `<id>.request.json` with the tool, tier and the exact arguments, and waits for `<id>.decision.json`. 5) `ApprovalWatcher` (a thread on the host) reads the request, calls the callback, writes the decision. 6) Yes: the tool runs. No, no answer in 10 minutes, or an approver that crashes: the tool does not run and the model is told "a person declined this call; do not try it again". The audit log records approved, declined or expired. 7) Who answers: `ab run` shows the payload in the terminal and needs an explicit `y`; without a terminal the run is refused before it starts. The local server parks the request on the run (`GET /runs/{id}` shows `waiting_for_approval` and the arguments) and the web app answers with `POST /runs/{id}/approvals/{approval_id}`. 8) `unapproved_live_tools` stays as the last line of defence in every caller: a tool that still cannot ask (on a server the SDK did not build, which would ignore the flags) is refused.
+- **Decisions and trade-offs:** The pause is in the tool server, like mock mode, because that is the one place the model cannot get around. A folder instead of a socket: NAT starts the tool server, not us, and a folder needs no port, token or protocol. Rate limit before approval, so a looping model cannot flood a person with requests. The server expires a request 10 seconds before the tool gives up, so the web app never shows "approved" for a call that timed out. Mock runs never ask.
+- **Limits:** The sandbox runner cannot ask yet (its tool servers are inside the VM, where the host cannot watch a folder), so it still refuses live tier-2 runs. Requests are answered one at a time. A run waiting for an answer holds one of the server's two run workers. Limited mode's "tier 1 needs approval too" (PLAN §4.4.1) is not applied.
+- **Where:** `packages/sdk/src/agentbuilder/approvals.py`, `tools/mcp_server.py` (`_wrap`), `compile/compiler.py` (`needs_approval`, `unapproved_live_tools`), `compile/nat_workflow.py` (`tool_call_timeout`), `server/app.py` (`_Run.ask`, `decide_approval`), `cli.py`, `agentbuilder_nat/local.py`.
+- **Proof:** `test_approvals.py` (real MCP client: yes runs the tool, no does not, exact payload seen, files cleaned up, folder 0700, mock never asks, expiry, crashing approver means no, terminal needs an explicit yes, flags only on live SDK servers); server tests (queue, 404/409, expiry, a server the SDK did not build refused); `test_approvals_on_nat.py` on real NAT + Fabric: refused without an approver, runs only after yes [verified].
+- **Not verified:** a live tier-2 call against real Google Calendar; the web app's approval screen.
+- **Interview angle:** *Why not ask the model to confirm?* The model is the thing that may have been tricked; the check must sit where it cannot reach. *What happens if nobody answers?* After 10 minutes it is a no, and the model is told so.
 
 ## Process
 

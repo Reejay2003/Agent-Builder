@@ -23,6 +23,7 @@ import uuid
 from collections.abc import Callable, Mapping
 from pathlib import Path
 
+from agentbuilder.approvals import Approver
 from agentbuilder.compile import (
     approval_needed,
     to_openshell_policy,
@@ -77,9 +78,17 @@ class SandboxRunner:
     ) -> subprocess.CompletedProcess[str]:
         return self._run(["openshell", *args], input=stdin, timeout=self._timeout, env={**os.environ, **(env or {})})
 
-    def run(self, compiled: CompiledAgent, prompt: str, *, environ: Mapping[str, str] | None = None) -> RunResult:
-        if live := unapproved_live_tools(compiled):
-            return RunResult(status="failed", error=approval_needed(live))
+    def run(
+        self,
+        compiled: CompiledAgent,
+        prompt: str,
+        *,
+        environ: Mapping[str, str] | None = None,
+        approve: Approver | None = None,
+    ) -> RunResult:
+        if live := unapproved_live_tools(compiled):  # the tool servers run in the VM: no folder we could watch
+            why = "; the sandbox runner cannot ask for approvals yet, use the local runner" if approve else ""
+            return RunResult(status="failed", error=approval_needed(live) + why)
         remote, notes, why = _sandbox_servers(compiled)
         if remote is None:
             return RunResult(status="failed", error=why)
