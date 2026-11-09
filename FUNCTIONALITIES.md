@@ -139,7 +139,7 @@ machine), and records exactly what the agent did. A local web app is the friendl
 - **Limits:** DuckDuckGo's HTML page is unofficial and can rate-limit or change.
 - **Where:** `packages/sdk/src/agentbuilder/library/`, manifest `packages/tool-manifests/personal_tools.manifest.json`.
 - **Proof:** about 60 offline tests against a fake Google server; mutation-checked (turning off email validation or `sendUpdates=none` fails tests); the personal template ran on real NAT with mocked Gmail [verified].
-- **Not verified:** any real Google call; the response shapes follow the documented API.
+- **Not verified:** live drafts, event creation and Sheets reads. Live `gmail.read` and `calendar.list_events` against the owner's account worked on 2026-11-07 [verified].
 - **Interview angle:** *What is prompt injection and what did you do?* Mail text can say "do X"; tools return it cleaned and labelled as data, risky tools are tiered, and tier 2 live runs are blocked until approvals exist. *Why one server per namespace?* Least privilege per namespace.
 
 ### F7. Google sign-in (`ab auth google`)
